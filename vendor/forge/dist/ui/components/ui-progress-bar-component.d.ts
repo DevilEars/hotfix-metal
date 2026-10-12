@@ -1,0 +1,56 @@
+import { EcsWorld } from '../../ecs/ecs-world.js';
+/**
+ * Fields of {@link UiProgressBarEcsComponent} with no sensible default;
+ * callers must always provide these.
+ */
+export interface UiProgressBarRequiredOptions {
+    /**
+     * The entity id of the fill visual: a child covering the bar with a
+     * linear or radial `MaskEcsComponent`, whose `shape.amount`
+     * `createUiProgressBarEcsSystem` sets from `value` every tick.
+     */
+    fill: number;
+}
+/**
+ * Fields of {@link UiProgressBarEcsComponent} with a sensible default;
+ * callers may omit these.
+ */
+export interface UiProgressBarDefaultedOptions {
+    /** The value `value` maps to an empty bar. Defaults to `0`. */
+    minValue: number;
+    /** The value `value` maps to a full bar. Defaults to `1`. */
+    maxValue: number;
+    /** The bar's current value, clamped to `[minValue, maxValue]`. Defaults to `minValue`. */
+    value: number;
+}
+/**
+ * A read-only fill indicator - health bars, loading bars, cooldowns. Unlike
+ * `UiSliderEcsComponent`, it has no `UiInteractableEcsComponent` counterpart
+ * and no `onValueChanged` event: `value` is meant to be driven entirely by
+ * game code (`progressBar.value = hp / maxHp`), which already knows when it
+ * changed and doesn't need to be told. Use `createProgressBar` for the
+ * common "track + fill" visual assembly, or build your own from these same
+ * pieces.
+ */
+export interface UiProgressBarEcsComponent extends UiProgressBarRequiredOptions, UiProgressBarDefaultedOptions {
+}
+export declare const uiProgressBarId: import("../../ecs/ecs-component.js").ComponentKey<UiProgressBarEcsComponent>;
+/**
+ * Attaches a {@link UiProgressBarEcsComponent} to `entity`.
+ * @param world - The ECS world `entity` belongs to.
+ * @param entity - The entity to attach the component to.
+ * @param options - Options for configuring the progress bar. `fill` has no
+ * sensible default and must always be provided; `value` defaults to
+ * `minValue`.
+ * @returns The attached component, for reading/setting `value` directly.
+ */
+export declare function addUiProgressBarComponent(world: EcsWorld, entity: number, options: UiProgressBarRequiredOptions & Partial<UiProgressBarDefaultedOptions>): UiProgressBarEcsComponent;
+/**
+ * Normalizes `progressBar.value` to a `0`-`1` fraction of the way from
+ * `minValue` to `maxValue` - the mask amount
+ * `createUiProgressBarEcsSystem` reveals the fill with.
+ * @param progressBar - The progress bar's `value`/`minValue`/`maxValue`.
+ * @returns The normalized fraction, clamped to `[0, 1]`. `0` if `minValue`
+ * and `maxValue` coincide (a zero-length range has no meaningful fraction).
+ */
+export declare function normalizeUiProgressBarValue(progressBar: Pick<UiProgressBarEcsComponent, 'value' | 'minValue' | 'maxValue'>): number;

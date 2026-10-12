@@ -1,0 +1,109 @@
+import { EcsWorld } from '../../ecs/ecs-world.js';
+import { Vector2 } from '../../math/index.js';
+import { RenderContext } from '../../rendering/index.js';
+import { CanvasInputOptions } from '../components/canvas-component.js';
+import { UiAnchorConfig } from '../types/ui-anchor.js';
+import { uiCanvasRenderModes } from '../types/ui-canvas-render-mode.js';
+import { UiScaleMode } from '../types/ui-scale-mode.js';
+/**
+ * `createUiCanvas` options for `renderMode: 'screenSpace'` (the default) -
+ * a dedicated, static UI camera drawing through its own off-screen
+ * `RenderTarget`, resolved every frame from the render destination's live
+ * size.
+ */
+export interface ScreenSpaceUiCanvasOptions extends CanvasInputOptions {
+    renderMode?: typeof uiCanvasRenderModes.screenSpace;
+    /**
+     * The dedicated UI camera's culling mask, matched against
+     * `SpriteEcsComponent.category` and
+     * `TextEcsComponent.category` to decide what this camera draws. Forge
+     * doesn't reserve or suggest any particular bit for UI - pick any value
+     * your game isn't already using for another camera, and reuse that same
+     * value for every UI visual's own category (`createLabel`'s `category`
+     * option, each UI sprite's `category`) so this canvas draws them. Leave
+     * that bit out of every other camera's `cullingMask`, or those cameras
+     * draw the UI too. A
+     * hardcoded "UI" bit baked into this module would only work by
+     * coincidence once more than one Forge-based package picks its own
+     * default independently - explicit, caller-owned values avoid that
+     * collision entirely. Note `matchesMask` does `identifier & mask` on
+     * plain JS `number`s, which `&` coerces to 32-bit *signed* integers - bit
+     * 31 is the sign bit, so `1 << 31` is `-2147483648`, not a clean
+     * single-bit flag; stick to bits 0-30.
+     */
+    cullingMask: number;
+    /**
+     * The resolution UI is authored against, in reference pixels. Defaults to
+     * `1920x1080`.
+     */
+    referenceResolution?: Vector2;
+    /** How the canvas's root rect responds to the destination's live size. */
+    scaleMode?: UiScaleMode;
+    /**
+     * The dedicated UI camera's `layer`, i.e. its position in the present
+     * pass's compositing order (see `CameraEcsComponent.layer`). Defaults to
+     * `1000`, comfortably above any world camera's default `layer` of `0`, so
+     * the UI composites on top without every game having to hand-tune camera
+     * layers just to put a HUD on screen.
+     */
+    layer?: number;
+}
+/**
+ * `createUiCanvas` options for `renderMode: 'worldSpace'` - a canvas whose
+ * root rect is an ordinary, anchored `RectTransformEcsComponent` positioned
+ * via the entity hierarchy, drawn through the caller's own `camera`.
+ */
+export interface WorldSpaceUiCanvasOptions extends CanvasInputOptions {
+    renderMode: typeof uiCanvasRenderModes.worldSpace;
+    /**
+     * The camera this canvas draws through - typically the game's own world
+     * camera, so this canvas pans, zooms, and moves with everything else it
+     * draws through.
+     */
+    camera: number;
+    /**
+     * The anchor this canvas's own root rect resolves with. Defaults to
+     * `UiAnchor.center()` (a literal `100x100` reference-pixel box) - size it
+     * to fit the content you'll add as its children (a health bar background,
+     * say). To keep the canvas above an entity, either give it a
+     * parent with `world.setParent` (it then also rotates and scales with that entity)
+     * or write its `RectTransformEcsComponent.anchoredPosition` from the
+     * entity's position in one of your own systems, registered before
+     * `registerUiSystems`, so it stays upright.
+     */
+    anchor?: UiAnchorConfig;
+    /**
+     * Offset of this canvas's own root rect from its anchor, in world units.
+     * See `anchor` above.
+     */
+    anchoredPosition?: Vector2;
+}
+export type CreateUiCanvasOptions = ScreenSpaceUiCanvasOptions | WorldSpaceUiCanvasOptions;
+/**
+ * Creates a UI canvas: a root entity with a `CanvasEcsComponent` and
+ * `RectTransformEcsComponent`. For `renderMode: 'screenSpace'` (the
+ * default), also a dedicated, static UI camera with a transparent clear
+ * color, its own off-screen `RenderTarget`, and a culling mask isolating it
+ * from the world so a world camera whose own `cullingMask` still matches
+ * everything doesn't draw UI content a second time. For
+ * `renderMode: 'worldSpace'`, no camera is created - `options.camera` names
+ * the (typically world) camera this canvas draws through instead.
+ *
+ * Call `registerUiSystems(world, renderContext, time)` once per `world`
+ * before (or after - registration order between the two doesn't matter,
+ * only tick order does) creating any canvases; this function only creates
+ * the canvas entity itself; it never touches system registration, so it's
+ * always safe to call once per canvas, however many canvases a world has.
+ * @param world - The ECS world to create the canvas entity in.
+ * @param renderContext - The render context a `'screenSpace'` canvas's UI
+ * camera/render target is built against. Unused for `'worldSpace'`.
+ * @param options - Options for configuring the canvas and its focus
+ * navigation inputs. Which fields are available - `cullingMask`/
+ * `referenceResolution`/`scaleMode`/`layer` vs. `camera`/`anchor`/
+ * `anchoredPosition` - depends on `renderMode`, enforced at compile time
+ * (see {@link ScreenSpaceUiCanvasOptions}/{@link WorldSpaceUiCanvasOptions}).
+ * @returns The created canvas entity. Attach children to it with
+ * `world.setParent(child, canvas)`, or use
+ * `createPanel`/`createLabel`/`createButton`.
+ */
+export declare function createUiCanvas(world: EcsWorld, renderContext: RenderContext, options: CreateUiCanvasOptions): number;

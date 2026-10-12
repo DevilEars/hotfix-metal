@@ -1,0 +1,213 @@
+import { Vec2 } from '../../../math/index.js';
+import { cursorValueTypes } from '../../constants/index.js';
+/** Represents a mouse input source with associated bindings. */
+/**
+ * The CSS pixels a wheel event reported in lines scrolls per line: the line
+ * height common wheel normalizers (React's, Facebook's `normalizeWheel`)
+ * use.
+ */
+const wheelLineHeight = 40;
+export class MouseInputSource {
+    /** The name of this input source. */
+    name = 'mouse';
+    /** The set of trigger bindings associated with this input source. */
+    triggerBindings = new Set();
+    /** The set of 1D axis bindings associated with this input source. */
+    axis1dBindings = new Set();
+    /** The set of 2D axis bindings associated with this input source. */
+    axis2dBindings = new Set();
+    /** The set of hold bindings associated with this input source. */
+    holdBindings = new Set();
+    _inputManager;
+    _container;
+    _mouseButtonPresses = new Set();
+    _mouseButtonDowns = new Set();
+    _mouseButtonUps = new Set();
+    _pointerPosition = Vec2.zero;
+    _pointerDelta = Vec2.zero;
+    _pointerScroll = Vec2.zero;
+    _wheelInput = 0;
+    /** Constructs a new MouseInputSource.
+     * @param inputManager - The input manager to register with.
+     * @param container - The HTML container element to attach mouse events to.
+     */
+    constructor(inputManager, container) {
+        this._inputManager = inputManager;
+        this._container = container;
+        container.addEventListener('mousedown', this._onMouseDownHandler);
+        container.addEventListener('mouseup', this._onMouseUpHandler);
+        container.addEventListener('wheel', this._onWheelHandler);
+        container.addEventListener('mousemove', this._onMouseMoveHandler);
+        this._inputManager.addResettable(this);
+        this.triggerBindings = new Set();
+        this.holdBindings = new Set();
+        this.axis1dBindings = new Set();
+        this.axis2dBindings = new Set();
+    }
+    /**
+     * The pointer's current position in CSS pixels: Y-down, origin at the
+     * container's top-left corner. On a high-DPI display this is smaller than
+     * the canvas's drawing-buffer coordinates by `RenderContext.pixelRatio`,
+     * so convert it to world space against `RenderContext.cssWidth`/
+     * `cssHeight`, not `width`/`height`. Recomputed from a fresh
+     * `getBoundingClientRect()` call on every `mousemove`, so it stays correct
+     * after the container is resized, scrolled, or otherwise reflowed.
+     */
+    get position() {
+        return this._pointerPosition;
+    }
+    /** How far `position` moved since the last `reset()`, in CSS pixels. */
+    get delta() {
+        return this._pointerDelta;
+    }
+    /**
+     * Accumulated wheel scroll delta since the last `reset()`, in CSS pixels:
+     * `WheelEvent.deltaX`/`deltaY`, so `x` is positive scrolling right and
+     * `y` positive scrolling down (Y-down, like `position`). Wheels that
+     * report lines or pages are converted to pixels.
+     */
+    get scroll() {
+        return this._pointerScroll;
+    }
+    /** Buttons that started being held down since the last `reset()`. */
+    get buttonsDown() {
+        return this._mouseButtonDowns;
+    }
+    /** Buttons currently held down. */
+    get buttonsHeld() {
+        return this._mouseButtonPresses;
+    }
+    /** Buttons that stopped being held down since the last `reset()`. */
+    get buttonsUp() {
+        return this._mouseButtonUps;
+    }
+    /**
+     * Ends the frame: clears the per-frame button sets, `delta` and `scroll`,
+     * and withdraws the frame's wheel input from the wheel-bound actions,
+     * since a wheel turn only describes the frame it happened in.
+     */
+    reset() {
+        this._mouseButtonDowns.clear();
+        this._mouseButtonUps.clear();
+        this._pointerDelta.x = 0;
+        this._pointerDelta.y = 0;
+        this._pointerScroll.x = 0;
+        this._pointerScroll.y = 0;
+        if (this._wheelInput !== 0) {
+            this._wheelInput = 0;
+            this._reportWheel();
+        }
+    }
+    /** Stops listening to the mouse and releases everything this source was holding. */
+    stop() {
+        this._container.removeEventListener('mousedown', this._onMouseDownHandler);
+        this._container.removeEventListener('mouseup', this._onMouseUpHandler);
+        this._container.removeEventListener('wheel', this._onWheelHandler);
+        this._container.removeEventListener('mousemove', this._onMouseMoveHandler);
+        this._inputManager.removeResettable(this);
+        this._mouseButtonPresses.clear();
+        this._wheelInput = 0;
+        this._inputManager.removeSourceInput(this);
+    }
+    _onMouseDownHandler = (event) => {
+        const button = event.button;
+        this._mouseButtonPresses.add(button);
+        this._mouseButtonDowns.add(button);
+        this._reportButton(button, true);
+    };
+    _onMouseUpHandler = (event) => {
+        const button = event.button;
+        this._mouseButtonPresses.delete(button);
+        this._mouseButtonUps.add(button);
+        this._reportButton(button, false);
+    };
+    _onWheelHandler = (event) => {
+        // Read the deltas before `deltaMode`: Firefox reports lines only to
+        // pages that read `deltaMode` first, and pixels otherwise.
+        const { deltaX, deltaY } = event;
+        const scale = this._wheelDeltaModeScale(event.deltaMode);
+        this._pointerScroll.x += deltaX * scale.x;
+        this._pointerScroll.y += deltaY * scale.y;
+        // Every wheel event in a frame adds up, and `reset` withdraws the total
+        // at the end of the frame.
+        this._wheelInput += (deltaY * scale.y) / 100;
+        this._reportWheel();
+    };
+    /**
+     * The CSS pixels one unit of a wheel event's delta stands for: `1` for
+     * pixels, {@link wheelLineHeight} for lines, and the container's size for
+     * pages.
+     */
+    _wheelDeltaModeScale(deltaMode) {
+        if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+            return { x: wheelLineHeight, y: wheelLineHeight };
+        }
+        if (deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+            return {
+                x: this._container.clientWidth,
+                y: this._container.clientHeight,
+            };
+        }
+        return { x: 1, y: 1 };
+    }
+    _reportButton(button, isDown) {
+        for (const binding of this.triggerBindings) {
+            if (binding.mouseButton === button) {
+                this._inputManager.setTriggerInput(this, binding, isDown);
+            }
+        }
+        // A hold action is held while any of its buttons is, so releasing one of
+        // two buttons bound to the same action doesn't end the hold.
+        const reportedActions = new Set();
+        for (const binding of this.holdBindings) {
+            if (reportedActions.has(binding.action) ||
+                binding.mouseButton !== button) {
+                continue;
+            }
+            reportedActions.add(binding.action);
+            let isActionDown = false;
+            for (const other of this.holdBindings) {
+                if (other.action === binding.action &&
+                    this._mouseButtonPresses.has(other.mouseButton)) {
+                    isActionDown = true;
+                }
+            }
+            this._inputManager.setHoldInput(this, binding.action, isActionDown);
+        }
+    }
+    _reportWheel() {
+        const reportedActions = new Set();
+        for (const binding of this.axis1dBindings) {
+            if (reportedActions.has(binding.action)) {
+                continue;
+            }
+            reportedActions.add(binding.action);
+            this._inputManager.setAxis1dInput(this, binding.action, this._wheelInput);
+        }
+    }
+    _onMouseMoveHandler = (event) => {
+        const containerBoundingClientRect = this._container.getBoundingClientRect();
+        const x = event.clientX - containerBoundingClientRect.left;
+        const y = event.clientY - containerBoundingClientRect.top;
+        const normalizedX = x / containerBoundingClientRect.width;
+        const normalizedY = y / containerBoundingClientRect.height;
+        for (const binding of this.axis2dBindings) {
+            const { cursorValueType } = binding;
+            const absoluteXOffset = binding.cursorOrigin.x * containerBoundingClientRect.width;
+            const absoluteYOffset = binding.cursorOrigin.y * containerBoundingClientRect.height;
+            if (cursorValueType === cursorValueTypes.absolute) {
+                this._inputManager.setAxis2dInput(this, binding.action, x - absoluteXOffset, y - absoluteYOffset);
+            }
+            else if (cursorValueType === cursorValueTypes.ratio) {
+                this._inputManager.setAxis2dInput(this, binding.action, normalizedX - binding.cursorOrigin.x, normalizedY - binding.cursorOrigin.y);
+            }
+            else {
+                throw new Error(`Unsupported cursor value type: ${cursorValueType}`);
+            }
+        }
+        this._pointerDelta.x += event.movementX;
+        this._pointerDelta.y += event.movementY;
+        this._pointerPosition.x = x;
+        this._pointerPosition.y = y;
+    };
+}

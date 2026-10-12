@@ -1,0 +1,48 @@
+import { positionId, rotationId } from '../../common/index.js';
+import { createComponentId } from '../../ecs/ecs-component.js';
+import { formatEntity } from '../../ecs/entity.js';
+import { Vec2 } from '../../math/index.js';
+import { withDefaults } from '../../utilities/with-defaults.js';
+export const linearSpringId = createComponentId('linear-spring');
+/**
+ * Attaches a {@link LinearSpringEcsComponent} to `entity`.
+ * @param world - The ECS world `entity` belongs to.
+ * @param entity - The (dedicated) entity to attach the spring component to.
+ * @param options - Options for configuring the spring.
+ * @returns The attached component, for further tuning or runtime changes.
+ * @throws An error if `stiffness` is negative, or if `restLength` is
+ * omitted and `entityA` or `entityB` has no `PositionEcsComponent` or
+ * `RotationEcsComponent` to measure it from.
+ */
+export function addLinearSpringComponent(world, entity, options) {
+    if (options.stiffness < 0) {
+        throw new Error(`Unable to add linear spring to entity ${formatEntity(entity)}: stiffness must be >= 0.`);
+    }
+    const restLength = options.restLength ?? computeAnchorDistance(world, options);
+    const component = {
+        ...withDefaults({ localAnchorA: Vec2.zero, localAnchorB: Vec2.zero }, options),
+        restLength,
+    };
+    return world.addComponent(entity, linearSpringId, component);
+}
+function computeAnchorDistance(world, options) {
+    const positionA = world.getComponent(options.entityA, positionId);
+    const rotationA = world.getComponent(options.entityA, rotationId);
+    const positionB = world.getComponent(options.entityB, positionId);
+    const rotationB = world.getComponent(options.entityB, rotationId);
+    if (positionA === null ||
+        rotationA === null ||
+        positionB === null ||
+        rotationB === null) {
+        throw new Error('Unable to add linear spring: entityA and entityB must both have Position and Rotation components when restLength is omitted.');
+    }
+    const localAnchorA = options.localAnchorA ?? Vec2.zero;
+    const localAnchorB = options.localAnchorB ?? Vec2.zero;
+    // Clone before rotating/adding: `positionA.world`/`positionB.world` are
+    // the entities' live position state, and `localAnchorA`/`localAnchorB` may
+    // be the same object references the component ends up storing, so these
+    // operations must not mutate them.
+    const worldAnchorA = Vec2.add(Vec2.clone(positionA.world), Vec2.rotate(Vec2.clone(localAnchorA), rotationA.world));
+    const worldAnchorB = Vec2.add(Vec2.clone(positionB.world), Vec2.rotate(Vec2.clone(localAnchorB), rotationB.world));
+    return Vec2.magnitude(Vec2.subtract(worldAnchorB, worldAnchorA));
+}

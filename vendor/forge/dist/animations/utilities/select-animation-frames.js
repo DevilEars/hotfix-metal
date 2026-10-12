@@ -1,0 +1,25 @@
+/**
+ * Selects a contiguous run of frames from a sprite sheet, in row-major order, to build an animation clip.
+ * @param spriteSheet - The sprite sheet to select frames from.
+ * @param numberOfFrames - The total number of frames to include in the animation. This should not exceed the total frames available in the sprite sheet.
+ * @param startFrame - The index of the first frame to include in the animation. Default is 0 (the first frame in the sprite sheet).
+ * @returns The selected frames, to pass to the `AnimationClip` constructor.
+ * @throws An error if the selection runs past the last row of the sprite sheet.
+ */
+export function selectAnimationFrames(spriteSheet, numberOfFrames, startFrame = 0) {
+    const selectedFrames = [];
+    const rowWidth = spriteSheet.frames[0].length;
+    for (let i = 0; i < numberOfFrames; i++) {
+        const frameIndex = startFrame + i;
+        const row = Math.floor(frameIndex / rowWidth);
+        const column = frameIndex % rowWidth;
+        if (row >= spriteSheet.frames.length) {
+            throw new Error(`Requested frame index ${frameIndex} exceeds the total number of frames in the sprite sheet.`);
+        }
+        const frame = spriteSheet.frames[row][column];
+        if (frame) {
+            selectedFrames.push(frame);
+        }
+    }
+    return selectedFrames;
+}

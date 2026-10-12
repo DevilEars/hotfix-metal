@@ -1,0 +1,200 @@
+import { Rects, Vec2 } from '../../math/index.js';
+import { isVisibleInHierarchy } from '../../rendering/components/visibility-component.js';
+import { canvasId, } from '../components/canvas-component.js';
+import { rectTransformId, } from '../components/rect-transform-component.js';
+import { uiFocusId } from '../components/ui-focus-component.js';
+import { uiInteractableId, } from '../components/ui-interactable-component.js';
+import { uiNavigationDirections, } from '../types/ui-navigation-direction.js';
+import { findOwningCanvas } from '../utilities/find-owning-canvas.js';
+import { resolveCanvasGroupState } from '../utilities/resolve-canvas-group-state.js';
+import { setUiFocus } from '../utilities/set-ui-focus.js';
+import { sortByDrawOrder } from '../utilities/sort-by-draw-order.js';
+const directionVectors = {
+    [uiNavigationDirections.up]: { x: 0, y: 1 },
+    [uiNavigationDirections.down]: { x: 0, y: -1 },
+    [uiNavigationDirections.left]: { x: -1, y: 0 },
+    [uiNavigationDirections.right]: { x: 1, y: 0 },
+};
+function dominantDirection(value) {
+    if (Math.abs(value.x) > Math.abs(value.y)) {
+        return value.x > 0
+            ? uiNavigationDirections.right
+            : uiNavigationDirections.left;
+    }
+    return value.y > 0 ? uiNavigationDirections.up : uiNavigationDirections.down;
+}
+function centerOf(rect) {
+    const size = Rects.size(rect);
+    return { x: rect.min.x + size.x / 2, y: rect.min.y + size.y / 2 };
+}
+function isFocusable(world, entity) {
+    const interactable = world.getComponent(entity, uiInteractableId);
+    return (!!interactable?.interactable &&
+        interactable.focusable &&
+        resolveCanvasGroupState(world, entity).interactable &&
+        isVisibleInHierarchy(world, entity));
+}
+/** Groups every focusable candidate (own `interactable: true` and `focusable: true`, not disabled by an ancestor `CanvasGroupEcsComponent`, and visible in the hierarchy) into `interactableEntities`/`rectTransforms` by its owning canvas entity. */
+function groupFocusCandidatesByCanvas(world, interactableEntities, interactables, rectTransforms) {
+    const candidatesByCanvas = new Map();
+    for (let i = 0; i < interactableEntities.length; i++) {
+        if (!interactables[i].interactable ||
+            !interactables[i].focusable ||
+            !resolveCanvasGroupState(world, interactableEntities[i]).interactable ||
+            !isVisibleInHierarchy(world, interactableEntities[i])) {
+            continue;
+        }
+        const owningCanvas = findOwningCanvas(world, interactableEntities[i]);
+        if (owningCanvas === null) {
+            continue;
+        }
+        let candidates = candidatesByCanvas.get(owningCanvas);
+        if (!candidates) {
+            candidates = [];
+            candidatesByCanvas.set(owningCanvas, candidates);
+        }
+        candidates.push({
+            entity: interactableEntities[i],
+            rect: rectTransforms[i].rect,
+        });
+    }
+    return candidatesByCanvas;
+}
+/**
+ * Finds the focusable candidate nearest `fromCenter` in `direction`: the
+ * lowest-scoring candidate whose center lies (at least partly) in that
+ * direction, scored by forward distance plus twice its lateral offset
+ * (penalizing candidates that are technically "that way" but mostly
+ * sideways) - a standard, simple directional nearest-neighbor heuristic.
+ */
+function findNearestInDirection(candidates, fromCenter, direction) {
+    const directionVector = directionVectors[direction];
+    let bestEntity = null;
+    let bestScore = Infinity;
+    for (const candidate of candidates) {
+        const delta = Vec2.subtract(Vec2.clone(centerOf(candidate.rect)), fromCenter);
+        const forward = Vec2.dot(delta, directionVector);
+        if (forward <= 0) {
+            continue;
+        }
+        const lateral = Vec2.magnitude(Vec2.subtract(Vec2.clone(delta), Vec2.multiply(Vec2.clone(directionVector), forward)));
+        const score = forward + lateral * 2;
+        if (score < bestScore) {
+            bestScore = score;
+            bestEntity = candidate.entity;
+        }
+    }
+    return bestEntity;
+}
+/** The candidate drawn first (see `sortByDrawOrder`): the first element of a menu, not one drawn over it. */
+function pickFirstDrawnCandidate(world, candidates) {
+    const entities = candidates.map((candidate) => candidate.entity);
+    return sortByDrawOrder(world, entities)[0] ?? null;
+}
+/** The currently focused entity's explicit `UiFocusEcsComponent` override for `direction`, if it's set and still focusable. */
+function resolveExplicitFocusTarget(world, focusedEntity, direction) {
+    const focusComponent = world.getComponent(focusedEntity, uiFocusId);
+    const explicitTarget = focusComponent?.[direction];
+    return explicitTarget !== undefined && isFocusable(world, explicitTarget)
+        ? explicitTarget
+        : null;
+}
+/** The next entity to focus for a navigation step in `direction`: an explicit override, else the nearest candidate, else (with nothing focused yet) the topmost one. */
+function resolveNextFocusTarget(world, canvas, direction, candidates) {
+    if (canvas.focusedEntity === null) {
+        return pickFirstDrawnCandidate(world, candidates);
+    }
+    const explicitTarget = resolveExplicitFocusTarget(world, canvas.focusedEntity, direction);
+    if (explicitTarget !== null) {
+        return explicitTarget;
+    }
+    const currentRectTransform = world.getComponent(canvas.focusedEntity, rectTransformId);
+    if (!currentRectTransform) {
+        return null;
+    }
+    return findNearestInDirection(candidates.filter((candidate) => candidate.entity !== canvas.focusedEntity), centerOf(currentRectTransform.rect), direction);
+}
+/** Applies `canvas.navigateInput`: moves focus one step in the dominant direction of each of its presses this frame, in order. */
+function applyNavigateInput(world, canvas, candidates) {
+    if (!canvas.navigateInput) {
+        return;
+    }
+    for (const press of canvas.navigateInput.presses) {
+        const next = resolveNextFocusTarget(world, canvas, dominantDirection(press), candidates);
+        if (next !== null) {
+            setUiFocus(world, canvas, next);
+        }
+    }
+}
+/** Applies `canvas.submitInput`: raises `onInvoke` on the focused element, if any, when it triggers. */
+function applySubmitInput(world, canvas) {
+    if (!canvas.submitInput?.isTriggered || canvas.focusedEntity === null) {
+        return;
+    }
+    const focused = world.getComponent(canvas.focusedEntity, uiInteractableId);
+    if (focused && isFocusable(world, canvas.focusedEntity)) {
+        focused.wasInvokedThisFrame = true;
+        focused.onInvoke.raise();
+    }
+}
+/**
+ * Creates a system that drives gamepad/keyboard focus navigation, the
+ * counterpart to pointer hover/click that lets a controller or keyboard
+ * reach and invoke the same interactables.
+ *
+ * Every `interactable: true`, `focusable: true` `UiInteractableEcsComponent` - not disabled by
+ * an ancestor `CanvasGroupEcsComponent` either, see `resolveCanvasGroupState`
+ * - and visible in the hierarchy (see `VisibilityEcsComponent`) is
+ * automatically focus-navigable: for each of a canvas's `navigateInput`
+ * presses this frame (see `Axis2dAction.presses`), focus moves to the
+ * nearest candidate on the same canvas in the press's dominant direction (a `UiFocusEcsComponent` on the
+ * currently focused entity overrides that search on whichever sides it
+ * sets). `submitInput` raises `onInvoke` on the focused element;
+ * `cancelInput` clears focus - register your own listener on
+ * `cancelInput.triggerEvent` for bespoke "close this menu" behavior.
+ *
+ * When the focused element is hidden (it or an ancestor), focus is
+ * released rather than moved, so game code that focuses something else
+ * itself isn't overridden; with nothing focused, the next navigation step
+ * focuses the first-drawn candidate again. Losing `interactable` doesn't
+ * release focus: a disabled element stays on screen, where a player can
+ * still see what's focused.
+ *
+ * Also resets every `UiInteractableEcsComponent.wasInvokedThisFrame` to
+ * `false` at the start of its tick, before re-setting it for this tick's
+ * submit invocation - the single point in the pipeline responsible for that
+ * reset (see `createUiInteractionEcsSystem`, which only ever sets it `true`
+ * for the pointer path and relies on this system having already cleared
+ * it this tick). Always register this system - even on a canvas with no
+ * `submitInput`/`cancelInput`/`navigateInput` configured - or
+ * `wasInvokedThisFrame` never clears; `registerUiSystems` registers it.
+ *
+ * Must be registered after `createUiRaycastEcsSystem` (if present) and
+ * before `createUiInteractionEcsSystem`.
+ * @returns The UI navigation ECS system.
+ */
+export const createUiNavigationEcsSystem = () => ({
+    name: 'uiNavigation',
+    query: [canvasId],
+    update: (world, { entities: canvasEntities, components: [canvases] }) => {
+        const { entities: interactableEntities, components: [interactables, rectTransforms], } = world.query([
+            uiInteractableId,
+            rectTransformId,
+        ]);
+        for (const interactable of interactables) {
+            interactable.wasInvokedThisFrame = false;
+        }
+        const candidatesByCanvas = groupFocusCandidatesByCanvas(world, interactableEntities, interactables, rectTransforms);
+        for (let c = 0; c < canvasEntities.length; c++) {
+            const canvasEntity = canvasEntities[c];
+            const canvas = canvases[c];
+            if (canvas.cancelInput?.isTriggered ||
+                (canvas.focusedEntity !== null &&
+                    !isVisibleInHierarchy(world, canvas.focusedEntity))) {
+                setUiFocus(world, canvas, null);
+            }
+            applyNavigateInput(world, canvas, candidatesByCanvas.get(canvasEntity) ?? []);
+            applySubmitInput(world, canvas);
+        }
+    },
+});

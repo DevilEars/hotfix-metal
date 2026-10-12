@@ -1,0 +1,151 @@
+const EPSILON = 1e-5;
+/**
+ * Scales down `near`/`far` proportionally so they never overlap (sum to more
+ * than `total`), the same way an over-sized pair of nine-slice borders is
+ * clamped so the corners meet in the middle instead of the center inverting.
+ */
+function clampInsets(near, far, total) {
+    if (total <= 0) {
+        return [0, 0];
+    }
+    const sum = near + far;
+    if (sum <= total) {
+        return [near, far];
+    }
+    const factor = total / sum;
+    return [near * factor, far * factor];
+}
+/**
+ * Splits one axis (width or height) into up to three bands: a near border
+ * (left/top), a center band, and a far border (right/bottom).
+ */
+function createAxisBands(size, nativeSize, near, far, uvOffset, uvScale) {
+    const [clampedNear, clampedFar] = clampInsets(near, far, size);
+    const [nativeNear, nativeFar] = clampInsets(near, far, nativeSize);
+    const nearUvSize = nativeSize > 0 ? (nativeNear / nativeSize) * uvScale : 0;
+    const farUvSize = nativeSize > 0 ? (nativeFar / nativeSize) * uvScale : 0;
+    const bands = [];
+    if (clampedNear > EPSILON) {
+        bands.push({
+            start: 0,
+            size: clampedNear,
+            nativeSize: clampedNear,
+            uvStart: uvOffset,
+            uvSize: nearUvSize,
+            stretches: false,
+        });
+    }
+    const centerSize = size - clampedNear - clampedFar;
+    if (centerSize > EPSILON) {
+        bands.push({
+            start: clampedNear,
+            size: centerSize,
+            nativeSize: Math.max(0, nativeSize - nativeNear - nativeFar),
+            uvStart: uvOffset + nearUvSize,
+            uvSize: uvScale - nearUvSize - farUvSize,
+            stretches: true,
+        });
+    }
+    if (clampedFar > EPSILON) {
+        bands.push({
+            start: size - clampedFar,
+            size: clampedFar,
+            nativeSize: clampedFar,
+            uvStart: uvOffset + uvScale - farUvSize,
+            uvSize: farUvSize,
+            stretches: false,
+        });
+    }
+    return bands;
+}
+/**
+ * Splits a band into one or more equally-sized segments along its own axis.
+ * `'stretch'` (and any non-stretching band, i.e. a border) always yields a
+ * single segment spanning the whole band. `'tile'` yields
+ * `round(band.size / band.nativeSize)` equal segments (at least one), each
+ * sampling the band's full texture rect - a "round" repeat that fills the
+ * band evenly with whole tiles instead of cropping a partial tile at the end.
+ */
+function subdivideBand(band, mode) {
+    if (mode === 'stretch' || !band.stretches || band.nativeSize <= EPSILON) {
+        return [{ start: band.start, size: band.size }];
+    }
+    const tileCount = Math.max(1, Math.round(band.size / band.nativeSize));
+    const segmentSize = band.size / tileCount;
+    return Array.from({ length: tileCount }, (_, index) => ({
+        start: band.start + index * segmentSize,
+        size: segmentSize,
+    }));
+}
+/**
+ * Builds the regions for a single grid cell (one x band crossed with one y
+ * band), subdividing into tiled segments per axis where that axis' mode is
+ * `'tile'`.
+ */
+function createCellRegions(xBand, yBand, edgeMode, centerMode, pivot, width, height) {
+    const mode = xBand.stretches && yBand.stretches ? centerMode : edgeMode;
+    const xSegments = subdivideBand(xBand, mode);
+    const ySegments = subdivideBand(yBand, mode);
+    const regions = [];
+    for (const xSegment of xSegments) {
+        for (const ySegment of ySegments) {
+            regions.push({
+                offset: {
+                    x: xSegment.start + xSegment.size / 2 - pivot.x * width,
+                    // Negated relative to x (written as a subtraction, not unary `-`,
+                    y: 
+                    // so a zero result stays +0 rather than -0): band coordinates
+                    // (`ySegment.start`/`.size`) run sprite-space Y-down (near/top
+                    // bands start at 0, far/bottom bands end at `height`), but this
+                    // offset is added directly to `entityPosition.world`, which is
+                    // Y-up. `pivot.y` is also Y-up (public API - `(0, 0)` bottom,
+                    // `(1, 1)` top), so `1 - pivot.y` first converts it to the same
+                    // Y-down distance-from-top the band coordinates use, before the
+                    // subtraction flips the whole result back to Y-up.
+                    (1 - pivot.y) * height - (ySegment.start + ySegment.size / 2),
+                },
+                size: { x: xSegment.size, y: ySegment.size },
+                uvOffset: { x: xBand.uvStart, y: yBand.uvStart },
+                uvScale: { x: xBand.uvSize, y: yBand.uvSize },
+            });
+        }
+    }
+    return regions;
+}
+/**
+ * Computes the nine-slice regions for a sprite, given its current size, and
+ * cuts each stretching band into tiled segments where its mode is `'tile'`.
+ *
+ * Corner regions are always a single, fixed-size quad. Edge regions stretch
+ * or tile along their one free axis (`edgeMode`); the center region
+ * stretches or tiles along both axes (`centerMode`). A border with an inset
+ * of `0` (the default for any axis with no slicing) collapses to just its
+ * center band, so a sprite with no insets at all degenerates to the single
+ * region a non-sliced sprite would render.
+ * @param width - The sprite's current width, in unscaled sprite-space units.
+ * @param height - The sprite's current height, in unscaled sprite-space units.
+ * @param pivot - The sprite's pivot, normalized to its own size and Y-up
+ * (`(0, 0)` is bottom-left, `(1, 1)` is top-right), matching
+ * `SpriteEcsComponent.pivot`.
+ * @param uvOffset - The sprite's texture rect offset, 0 to 1.
+ * @param uvScale - The sprite's texture rect size, 0 to 1.
+ * @param slices - The nine-slice configuration. `nativeWidth`/`nativeHeight`
+ * are normally already resolved by `createImageSprite`/`addSpriteComponent`;
+ * if they're still omitted (e.g. `slices` was assigned to an
+ * already-attached sprite), the current `width`/`height` is used, which only
+ * samples the intended border art while the sprite is at that size.
+ * @returns Up to nine regions, each a quad to draw in place of the sprite's
+ * single quad.
+ */
+export function computeNineSliceRegions(width, height, pivot, uvOffset, uvScale, slices) {
+    const { left, right, top, bottom, edgeMode = 'stretch', centerMode = 'stretch', nativeWidth = width, nativeHeight = height, } = slices;
+    const xBands = createAxisBands(width, nativeWidth, left, right, uvOffset.x, uvScale.x);
+    const yBands = createAxisBands(height, nativeHeight, top, bottom, uvOffset.y, uvScale.y);
+    const regions = [];
+    for (const xBand of xBands) {
+        for (const yBand of yBands) {
+            regions.push(...createCellRegions(xBand, yBand, edgeMode, centerMode, pivot, width, height));
+        }
+    }
+    return regions;
+}

@@ -1,0 +1,15 @@
+import { raycastConvexPolygon } from './raycast-convex-polygon.js';
+/**
+ * Casts a ray segment against a polygon-collider body.
+ * @param polygonBody - The body with a {@link PolygonCollider}.
+ * @param start - The ray's world-space start point.
+ * @param end - The ray's world-space end point.
+ * @returns The intersection closest to `start`, or `null` if the segment
+ * from `start` to `end` doesn't cross the polygon.
+ */
+export function raycastPolygon(polygonBody, start, end) {
+    const polygonCollider = polygonBody.collider;
+    const vertices = polygonCollider.getWorldVertices(polygonBody.position, polygonBody.rotation);
+    const normals = polygonCollider.getWorldNormals(polygonBody.rotation);
+    return raycastConvexPolygon(vertices, normals, start, end);
+}

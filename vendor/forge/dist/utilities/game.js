@@ -1,0 +1,80 @@
+/**
+ * Runs the game loop: every `requestAnimationFrame` frame, it updates its
+ * `Time` with `performance.now()` and calls `update()` on each of its
+ * `EcsWorld`s, in array order. It doesn't render or resize anything.
+ */
+export class Game {
+    /**
+     * The HTML element associated with the game (e.g. the one containing its
+     * canvas), for consumers that need a DOM anchor (input sources, overlay
+     * elements, etc.). `Game` itself does nothing with it.
+     */
+    container;
+    _isRunning = false;
+    _animationFrameId = null;
+    _time;
+    _worlds;
+    /**
+     * Creates a new Game instance.
+     * @param time - The Time instance for managing time-related operations.
+     * @param worlds - The ECS worlds to update once per frame and stop when the game stops. A game can drive more than one, e.g. a gameplay world alongside a separate UI overlay world.
+     * @param container - The HTML element associated with the game.
+     */
+    constructor(time, worlds, container) {
+        this._time = time;
+        this._worlds = worlds;
+        this.container = container;
+    }
+    /**
+     * Starts the game loop. The first frame's delta time is measured from
+     * this call. Does nothing if the game is already running.
+     */
+    run() {
+        if (this._isRunning) {
+            return;
+        }
+        this._isRunning = true;
+        // Seed the time tracker with the current time so the first frame's
+        // delta time reflects the time since `run()` was called, rather than
+        // the time since the page loaded. Without this, navigating to a game
+        // client-side (e.g. via SPA routing) long after the page first loaded
+        // produces a huge first-frame delta time, which can cause a single,
+        // massive integration step (e.g. physics bodies tunnelling through
+        // boundaries).
+        this._time.update(performance.now());
+        this._animationFrameId = requestAnimationFrame(this._gameLoop);
+    }
+    /**
+     * Stops the game loop: cancels the next frame and calls `stop()` on each
+     * world, which runs every registered system's `cleanup`.
+     */
+    stop() {
+        this._isRunning = false;
+        if (this._animationFrameId !== null) {
+            cancelAnimationFrame(this._animationFrameId);
+            this._animationFrameId = null;
+        }
+        for (const world of this._worlds) {
+            world.stop();
+        }
+    }
+    _gameLoop = () => {
+        if (!this._isRunning) {
+            return;
+        }
+        // Use our own `performance.now()` reading taken at the point this
+        // callback actually executes, rather than the timestamp
+        // `requestAnimationFrame` passes in. That timestamp isn't guaranteed to
+        // be monotonic relative to a prior `performance.now()` call - it can
+        // reflect when the browser decided to start the frame rather than when
+        // the callback ran, which occasionally lands slightly before the
+        // previous tick's recorded time (e.g. right after a heavy synchronous
+        // block) and produces a negative delta. Reading our own clock here
+        // keeps every delta relative to the same monotonic source.
+        this._time.update(performance.now());
+        for (const world of this._worlds) {
+            world.update();
+        }
+        this._animationFrameId = requestAnimationFrame(this._gameLoop);
+    };
+}

@@ -1,0 +1,31 @@
+import { Vec2 } from '../../math/index.js';
+/**
+ * Detects a collision between two circle-collider bodies.
+ * @param bodyA - The first body, with a {@link CircleCollider}.
+ * @param bodyB - The second body, with a {@link CircleCollider}.
+ * @returns A collision manifold (entity ids not yet populated) if the
+ * circles overlap, otherwise `null`.
+ */
+export function detectCircleCircleCollision(bodyA, bodyB) {
+    const colliderA = bodyA.collider;
+    const colliderB = bodyB.collider;
+    const centerA = colliderA.getWorldCenter(bodyA.position, bodyA.rotation);
+    const centerB = colliderB.getWorldCenter(bodyB.position, bodyB.rotation);
+    const delta = Vec2.subtract(centerB, centerA);
+    const distance = Vec2.magnitude(delta);
+    const radiusSum = colliderA.radius + colliderB.radius;
+    if (distance > radiusSum) {
+        return null;
+    }
+    const normal = distance === 0 ? Vec2.up : Vec2.divide(delta, distance);
+    const depth = radiusSum - distance;
+    // Scale a clone of `normal`, not `normal` itself: `normal` is returned as
+    // the manifold's unit contact normal.
+    const contactPoint = Vec2.add(centerA, Vec2.multiply(Vec2.clone(normal), colliderA.radius));
+    return {
+        normal,
+        depth,
+        contactPoints: [contactPoint],
+        featureIds: [0],
+    };
+}

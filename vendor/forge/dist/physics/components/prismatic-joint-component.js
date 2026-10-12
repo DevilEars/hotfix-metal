@@ -1,0 +1,55 @@
+import { rotationId } from '../../common/index.js';
+import { createComponentId } from '../../ecs/ecs-component.js';
+import { formatEntity } from '../../ecs/entity.js';
+import { Vec2 } from '../../math/index.js';
+import { withDefaults } from '../../utilities/with-defaults.js';
+export const prismaticJointId = createComponentId('prismatic-joint');
+/**
+ * Attaches a {@link PrismaticJointEcsComponent} to `entity`, constraining
+ * `options.entityB` to slide relative to `options.entityA` along `axis`.
+ * `entity` is a dedicated joint entity, not `entityA` or `entityB`
+ * themselves. `entityA`/`entityB` must already have a `RotationEcsComponent`
+ * (used to compute `referenceAngle`).
+ * @param world - The ECS world `entity` belongs to.
+ * @param entity - The (dedicated) entity to attach the joint component to.
+ * @param options - Options for configuring the joint.
+ * @returns The attached component, for further tuning or runtime changes.
+ * @throws An error if `axis` is the zero vector, `lowerTranslation` is
+ * greater than `upperTranslation`, or `entityA` or `entityB` has no
+ * `RotationEcsComponent`.
+ */
+export function addPrismaticJointComponent(world, entity, options) {
+    const defaultOptions = {
+        localAnchorA: Vec2.zero,
+        localAnchorB: Vec2.zero,
+        axis: Vec2.right,
+        enableLimit: false,
+        lowerTranslation: 0,
+        upperTranslation: 0,
+        hertz: 60,
+        dampingRatio: 2,
+    };
+    const merged = withDefaults(defaultOptions, options);
+    if (Vec2.magnitudeSquared(merged.axis) === 0) {
+        throw new Error(`Unable to add prismatic joint to entity ${formatEntity(entity)}: axis must not be the zero vector.`);
+    }
+    if (merged.lowerTranslation > merged.upperTranslation) {
+        throw new Error(`Unable to add prismatic joint to entity ${formatEntity(entity)}: lowerTranslation (${merged.lowerTranslation}) must be <= upperTranslation (${merged.upperTranslation}).`);
+    }
+    const rotationA = world.getComponent(options.entityA, rotationId);
+    const rotationB = world.getComponent(options.entityB, rotationId);
+    if (rotationA === null || rotationB === null) {
+        throw new Error(`Unable to add prismatic joint to entity ${formatEntity(entity)}: entityA and entityB must both have a RotationEcsComponent.`);
+    }
+    const component = {
+        ...merged,
+        // Clone before normalizing: `merged.axis` may be `options.axis`, the
+        // caller's own vector object, which must not be mutated as a side effect.
+        axis: Vec2.normalize(Vec2.clone(merged.axis)),
+        referenceAngle: rotationB.world - rotationA.world,
+        accumulatedPerpImpulse: 0,
+        accumulatedAngularImpulse: 0,
+        accumulatedLimitImpulse: 0,
+    };
+    return world.addComponent(entity, prismaticJointId, component);
+}

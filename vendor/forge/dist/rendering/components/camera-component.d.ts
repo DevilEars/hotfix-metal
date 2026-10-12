@@ -1,0 +1,121 @@
+import { Axis1dAction, Axis2dAction } from '../../input/index.js';
+import { EcsWorld } from '../../ecs/ecs-world.js';
+import { RenderTarget } from '../render-target.js';
+import { Color } from '../color.js';
+/**
+ * Fields of {@link CameraEcsComponent} with a sensible default; callers may
+ * omit these.
+ */
+export interface CameraDefaultedOptions {
+    /**
+     * The current zoom level. Higher values zoom in (the view covers less of
+     * the world); lower values zoom out. Adjusted by `zoomInput` (via
+     * `zoomSensitivity`) when the camera isn't `isStatic`, and clamped to
+     * `[minZoom, maxZoom]`.
+     */
+    zoom: number;
+    /**
+     * How strongly `zoomInput` changes `zoom`. Applied exponentially (see
+     * `createCameraEcsSystem`) so scrolling has a consistent relative effect
+     * regardless of the current zoom level.
+     */
+    zoomSensitivity: number;
+    /**
+     * How strongly `panInput` moves the camera's position. Scaled by the
+     * inverse of the current `zoom`, so panning covers the same apparent
+     * distance on screen at any zoom level.
+     */
+    panSensitivity: number;
+    /**
+     * The lower bound `zoom` is clamped to.
+     */
+    minZoom: number;
+    /**
+     * The upper bound `zoom` is clamped to.
+     */
+    maxZoom: number;
+    /**
+     * When `true`, this camera ignores `zoomInput` and `panInput` entirely
+     * (`createCameraEcsSystem` returns early for it). Use for cameras whose
+     * position and zoom are driven by other means, or that should never move.
+     */
+    isStatic: boolean;
+    /**
+     * A bitmask matched against each sprite's and text's `category`
+     * (`matchesMask`) to decide whether this camera draws it. Defaults to
+     * `0xffffffff` (every category) in `addCameraComponent`.
+     */
+    cullingMask: number;
+    /**
+     * The draw-order layer for this camera's `renderTarget`, relative to other
+     * cameras presented in the same frame: lower layers are presented (and
+     * thus drawn onto the canvas) first, so higher layers appear on top. Only
+     * meaningful between cameras with *different* render targets; has no
+     * effect on cameras that share one (they're already composited together
+     * before presenting) or that render straight to the canvas (those always
+     * end up beneath every presented render target).
+     */
+    layer: number;
+    /**
+     * The color, with straight (not premultiplied) alpha, this camera's
+     * destination (its `renderTarget`, or the canvas) is cleared to before
+     * anything is drawn. Each destination is cleared once per frame, by the
+     * first camera that draws into it, unless `RenderContext.clearStrategy`
+     * is `'none'`. Defaults to `Color.transparent`.
+     */
+    clearColor: Color;
+    /**
+     * The total height, in world units, this camera's view spans vertically.
+     * Horizontal extent follows automatically from the destination's aspect
+     * ratio, so the same `verticalWorldUnits` shows the same amount of the
+     * world vertically regardless of window size/shape (see
+     * `computeCameraView`). Defaults to `10`.
+     */
+    verticalWorldUnits: number;
+    /**
+     * Whether this camera orders sprites and text by height on screen within
+     * a layer and world order, for top-down and isometric views: a higher
+     * world Y draws first, so whatever is lower on screen is in front. Each
+     * root entity's subtree sorts by the root's Y, so a character's sword
+     * stays with the character. Defaults to `false`: sprites draw in
+     * hierarchy order, the right choice for side views and UI.
+     */
+    ySort: boolean;
+}
+/**
+ * Makes an entity a camera: `createRenderEcsSystem` draws the area of the
+ * world around the entity's `position.world` (see `computeCameraView`) onto
+ * the canvas, or into `renderTarget`. Add one with
+ * {@link addCameraComponent}, or create a camera entity with
+ * `createCamera`.
+ */
+export interface CameraEcsComponent extends CameraDefaultedOptions {
+    /**
+     * The 1D input action that drives `zoom` changes, if any. Ignored while
+     * `isStatic` is `true`.
+     */
+    zoomInput?: Axis1dAction;
+    /**
+     * The 2D input action that drives panning (the camera's local position),
+     * if any. Ignored while `isStatic` is `true`.
+     */
+    panInput?: Axis2dAction;
+    /**
+     * When set, this camera renders into the given off-screen render target
+     * instead of directly onto the canvas. A present pass is then responsible
+     * for drawing the target's color texture onto the canvas.
+     */
+    renderTarget?: RenderTarget;
+}
+/** The component key of {@link CameraEcsComponent}. */
+export declare const cameraId: import("../../ecs/ecs-component.js").ComponentKey<CameraEcsComponent>;
+/**
+ * Attaches a {@link CameraEcsComponent} to `entity`. A camera also needs a
+ * `PositionEcsComponent` (see `addPositionComponent`) for `createCameraEcsSystem` to
+ * pan it; use `createCamera` to get both on a fresh entity in one call.
+ * @param world - The ECS world `entity` belongs to.
+ * @param entity - The entity to attach the component to.
+ * @param options - Options for configuring the camera.
+ * @returns The attached component, for further tuning or runtime changes.
+ */
+export declare function addCameraComponent(world: EcsWorld, entity: number, options?: Partial<CameraEcsComponent>): CameraEcsComponent;

@@ -1,0 +1,57 @@
+import { bloomCompositeFragmentShader, bloomThresholdFragmentShader, boxDownsampleFragmentShader, crossFadeFragmentShader, cubicShaderInclude, ForgeShaderSource, gaussianBlurFragmentShader, passthroughFragmentShader, passthroughVertexShader, perlinNoiseFragmentShader, perlinNoiseShaderInclude, quinticShaderInclude, radialGradientShader, radialGradientShaderInclude, randomGradientShaderInclude, ResolveIncludesPreProcessor, sdfBoxShaderInclude, sdfCircleShaderInclude, sdfEquilateralTriangleInclude, sdfHexagonInclude, sdfOctagonInclude, sdfOrientedBoxShaderInclude, sdfRhombusInclude, sdfTrapezoidInclude, ShaderCache, spriteFragmentShader, spriteMaskShaderInclude, spriteMaskVertexShaderInclude, spriteVertexShader, toneMappingFragmentShader, } from '../shaders/index.js';
+import { terrainFragmentShader, terrainVertexShader, } from '../terrain/shaders/index.js';
+import { msdfEffectsFragmentShader, msdfFillFragmentShader, msdfFillVertexShader, msdfVertexShader, } from '../../text/rendering/shaders/index.js';
+/**
+ * Creates and initializes a ShaderCache instance with predefined shader includes and shaders.
+ *
+ * The shader includes added to the ShaderCache provide reusable shader code snippets, such as
+ * cubic interpolation, Perlin noise, quintic interpolation, radial gradients, random gradients,
+ * signed distance functions (SDF) for circles, and oriented boxes, and the
+ * `spriteMask` include every sprite fragment shader applies masks with.
+ *
+ * The shaders added to the ShaderCache include fragment and vertex shaders for rendering
+ * radial gradients, Perlin noise, and sprites.
+ *
+ * @returns {ShaderCache} A ShaderCache instance populated with the predefined shader includes
+ * and shaders.
+ */
+export function createShaderCache() {
+    const includeMap = [
+        new ForgeShaderSource(cubicShaderInclude),
+        new ForgeShaderSource(perlinNoiseShaderInclude),
+        new ForgeShaderSource(quinticShaderInclude),
+        new ForgeShaderSource(radialGradientShaderInclude),
+        new ForgeShaderSource(randomGradientShaderInclude),
+        new ForgeShaderSource(sdfBoxShaderInclude),
+        new ForgeShaderSource(sdfCircleShaderInclude),
+        new ForgeShaderSource(sdfEquilateralTriangleInclude),
+        new ForgeShaderSource(sdfHexagonInclude),
+        new ForgeShaderSource(sdfOctagonInclude),
+        new ForgeShaderSource(sdfOrientedBoxShaderInclude),
+        new ForgeShaderSource(sdfRhombusInclude),
+        new ForgeShaderSource(sdfTrapezoidInclude),
+        new ForgeShaderSource(spriteMaskShaderInclude),
+        new ForgeShaderSource(spriteMaskVertexShaderInclude),
+    ];
+    const includesPreProcessor = new ResolveIncludesPreProcessor(includeMap);
+    const shaderCache = new ShaderCache([includesPreProcessor])
+        .addShader(new ForgeShaderSource(radialGradientShader))
+        .addShader(new ForgeShaderSource(perlinNoiseFragmentShader))
+        .addShader(new ForgeShaderSource(spriteFragmentShader))
+        .addShader(new ForgeShaderSource(spriteVertexShader))
+        .addShader(new ForgeShaderSource(passthroughFragmentShader))
+        .addShader(new ForgeShaderSource(passthroughVertexShader))
+        .addShader(new ForgeShaderSource(gaussianBlurFragmentShader))
+        .addShader(new ForgeShaderSource(crossFadeFragmentShader))
+        .addShader(new ForgeShaderSource(boxDownsampleFragmentShader))
+        .addShader(new ForgeShaderSource(bloomThresholdFragmentShader))
+        .addShader(new ForgeShaderSource(bloomCompositeFragmentShader))
+        .addShader(new ForgeShaderSource(toneMappingFragmentShader))
+        .addShader(new ForgeShaderSource(terrainVertexShader))
+        .addShader(new ForgeShaderSource(terrainFragmentShader))
+        .addShader(new ForgeShaderSource(msdfFillVertexShader))
+        .addShader(new ForgeShaderSource(msdfFillFragmentShader))
+        .addShader(new ForgeShaderSource(msdfEffectsFragmentShader))
+        .addShader(new ForgeShaderSource(msdfVertexShader));
+    return shaderCache;
+}

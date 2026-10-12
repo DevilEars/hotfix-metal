@@ -1,0 +1,155 @@
+import { EcsWorld } from '../../ecs/ecs-world.js';
+import { Vector2 } from '../../math/index.js';
+import { Color } from '../color.js';
+import { NineSliceOptions } from '../nine-slice-options.js';
+import type { SpriteMaterial } from '../materials/sprite-material.js';
+import type { Texture } from '../texture.js';
+/**
+ * Fields of {@link SpriteEcsComponent} with no sensible default; callers
+ * must always provide these.
+ */
+export interface SpriteRequiredOptions {
+    /**
+     * The sprite's width in world units. Scales the unit quad horizontally
+     * before it's rotated and translated to the entity's world position.
+     */
+    width: number;
+    /**
+     * The sprite's height in world units. Scales the unit quad vertically
+     * before it's rotated and translated to the entity's world position.
+     */
+    height: number;
+    /**
+     * The image the sprite draws, sampled within `uvOffset`/`uvScale`. Assign
+     * another texture to change the image. Consecutive sprites with the same
+     * texture, emissive map and material draw in one instanced draw call.
+     */
+    texture: Texture;
+}
+/**
+ * An emissive map: light a sprite gives off, added on top of its tinted
+ * texture unaffected by tint.
+ */
+export interface SpriteEmissive {
+    /**
+     * The emissive map, sampled at the same UVs as the sprite's `texture`. A
+     * greyscale mask works well, colored by `color`.
+     */
+    texture: Texture;
+    /**
+     * Multiplies the map's RGB. Channels above `1` push the glow into HDR
+     * range, for `createBloomEcsSystem` on an `hdr` render target to bloom.
+     */
+    color: Color;
+}
+/**
+ * Fields of {@link SpriteEcsComponent} with a sensible default; callers may
+ * omit these.
+ */
+export interface SpriteDefaultedOptions {
+    /**
+     * The sprite's origin, normalized to the sprite's own size: `(0, 0)` is
+     * the bottom-left corner, `(0.5, 0.5)` (the default) is the center, and
+     * `(1, 1)` is the top-right corner - Y-up, matching every other
+     * Y-facing value in the engine (world position, rotation). Determines
+     * which point of the sprite is placed at, and rotated/scaled around, the
+     * entity's position.
+     */
+    pivot: Vector2;
+    /**
+     * A color the sprite's sampled texture color is multiplied by, alpha
+     * included, to tint it. Defaults to `Color.white`, which leaves the
+     * texture unmodified.
+     */
+    tintColor: Color;
+    /**
+     * The top-left corner of the region of the texture to sample, as a
+     * normalized (0 to 1) fraction of the texture's full size. Used with
+     * `uvScale` to select a single frame from a texture atlas/sprite sheet;
+     * updated automatically by the sprite animation system when the sprite
+     * has a `SpriteAnimationEcsComponent`.
+     */
+    uvOffset: Vector2;
+    /**
+     * The size of the region of the texture to sample, as a normalized (0 to
+     * 1) fraction of the texture's full width/height. Defaults to `(1, 1)`
+     * (the whole texture). Used with `uvOffset` to select a single frame from
+     * a texture atlas/sprite sheet.
+     */
+    uvScale: Vector2;
+    /**
+     * The sprite's emissive map, or `null` (the default) for none. Assign
+     * another to change the sprite's glow.
+     */
+    emissive: SpriteEmissive | null;
+    /**
+     * The material the sprite draws with, from `createSpriteMaterial`, or
+     * `null` (the default) for the render context's shared
+     * `spriteMaterial`.
+     */
+    material: SpriteMaterial | null;
+    /**
+     * The render category the sprite belongs to, matched against each
+     * camera's `cullingMask` to decide which cameras draw it. Defaults to
+     * `1`, as for text.
+     */
+    category: number;
+    /**
+     * The draw-order layer for this sprite, relative to other sprites and
+     * text drawn by the same camera: lower layers are drawn first, so higher
+     * layers appear on top. Within a layer, sprites draw by their entity's
+     * `DrawOrderEcsComponent` and then in hierarchy order (see the rendering
+     * guide).
+     */
+    layer: number;
+    /**
+     * Nine-slice ("9-patch") configuration. When set, the render system draws
+     * this sprite as up to nine regions (four fixed-size corners, four
+     * stretched/tiled edges, and a stretched/tiled center) instead of a single
+     * stretched quad, so corner artwork keeps its size as `width`/`height`
+     * change. Omit for a normal, single-quad sprite.
+     *
+     * `addSpriteComponent` fills in any omitted
+     * `nativeWidth`/`nativeHeight` from the sprite's `width`/`height` at the
+     * moment it's attached, so resizing the sprite afterwards never changes
+     * which part of the texture its borders sample.
+     */
+    slices?: NineSliceOptions;
+}
+/**
+ * Draws a texture as a rectangle at the entity's world position, rotated
+ * and scaled by its world rotation and scale, and mirrored by its
+ * `FlipEcsComponent`, if any. Drawn by `createRenderEcsSystem` for every
+ * camera whose `cullingMask` matches `category`. Add one with
+ * {@link addSpriteComponent}.
+ */
+export interface SpriteEcsComponent extends SpriteRequiredOptions, SpriteDefaultedOptions {
+    /**
+     * An additional multiplier applied to `tintColor.a` when computing this
+     * sprite's final rendered alpha, on top of (not instead of) the tint's
+     * own alpha. Left `undefined`, this sprite renders at `tintColor.a`
+     * alone - a genuinely optional field, not one with a `1` default, kept
+     * separate from `tintColor.a` so a system can apply an environment-wide
+     * fade (e.g. `@forge-game-engine/forge/ui`'s `CanvasGroupEcsComponent`,
+     * via `createUiCanvasGroupEcsSystem`) without overwriting - and later
+     * needing to restore - whatever alpha the caller authored on `tintColor`
+     * itself.
+     */
+    opacityMultiplier?: number;
+}
+/** The component key of {@link SpriteEcsComponent}. */
+export declare const spriteId: import("../../ecs/ecs-component.js").ComponentKey<SpriteEcsComponent>;
+/**
+ * Attaches a {@link SpriteEcsComponent} to `entity`.
+ * @param world - The ECS world `entity` belongs to.
+ * @param entity - The entity to attach the component to.
+ * @param options - Options for configuring the sprite. `width`, `height`,
+ * and `texture` have no sensible default and must always be provided.
+ * `pivot`, `uvOffset`, `uvScale` and `slices` are copied, so the component
+ * never shares them with `options` or with other sprites built from the same
+ * options. If `slices` is set, any omitted `nativeWidth`/`nativeHeight` is
+ * captured from `width`/`height` here, before anything can resize the
+ * sprite.
+ * @returns The attached component, for further tuning or runtime changes.
+ */
+export declare function addSpriteComponent(world: EcsWorld, entity: number, options: SpriteRequiredOptions & Partial<SpriteEcsComponent>): SpriteEcsComponent;

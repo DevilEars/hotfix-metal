@@ -1,0 +1,28 @@
+import { scaleId } from '../../common/index.js';
+import { lifetimeId, } from '../../lifecycle/components/lifetime-component.js';
+import { ageScaleId, } from '../components/age-scale-component.js';
+/**
+ * Creates an ECS system to handle age-based scaling of entities.
+ *
+ * It writes the local scale; `createTransformEcsSystem` turns that into the
+ * world scale.
+ * @returns An ECS system that updates the scale of entities based on their lifetime.
+ */
+export const createAgeScaleEcsSystem = () => ({
+    query: [lifetimeId, scaleId, ageScaleId],
+    update: (_world, { components: [lifetimes, scales, ageScales] }) => {
+        for (let i = 0; i < lifetimes.length; i++) {
+            const lifetime = lifetimes[i];
+            const scale = scales[i];
+            const ageScale = ageScales[i];
+            const lifetimeRatio = lifetime.elapsedSeconds / lifetime.durationSeconds;
+            const invertedRatio = 1 - lifetimeRatio;
+            scale.local.x =
+                ageScale.originalScaleX * invertedRatio +
+                    ageScale.finalLifetimeScaleX * lifetimeRatio;
+            scale.local.y =
+                ageScale.originalScaleY * invertedRatio +
+                    ageScale.finalLifetimeScaleY * lifetimeRatio;
+        }
+    },
+});

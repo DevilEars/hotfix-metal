@@ -1,0 +1,40 @@
+import { angularVelocityMotorId, } from '../components/angular-velocity-motor-component.js';
+import { rigidBodyId, } from '../components/rigidbody-component.js';
+import { getRigidBodyMassData } from '../rigid-body-mass-data.js';
+/**
+ * Creates an ECS system that drives every entity with an
+ * `AngularVelocityMotorEcsComponent` toward `targetVelocity`, clamped by
+ * `maxTorque`. Recomputed fresh from the body's current angular velocity
+ * every tick (no warm-starting), so it automatically recovers after an
+ * external disturbance (a collision, a scripted torque). Order relative to
+ * other physics systems doesn't matter beyond running before whatever
+ * system integrates velocity into position
+ * (`createEulerIntegrationEcsSystem`). Entities whose `RigidBodyEcsComponent.type`
+ * (see {@link RigidBodyType}) isn't `'dynamic'` are skipped, since
+ * `'static'`/`'kinematic'` bodies aren't affected by torque.
+ * @param time - Used to read the tick's delta time.
+ * @returns An ECS system that drives every motor-equipped entity's angular
+ * velocity every tick.
+ */
+export const createAngularVelocityMotorEcsSystem = (time) => ({
+    query: [angularVelocityMotorId, rigidBodyId],
+    update: (world, { entities, components: [motors, rigidBodies] }) => {
+        const dt = time.deltaTimeInSeconds;
+        if (dt <= 0) {
+            return;
+        }
+        for (let i = 0; i < motors.length; i++) {
+            const rigidBody = rigidBodies[i];
+            if (rigidBody.type !== 'dynamic') {
+                continue;
+            }
+            const motor = motors[i];
+            const { invInertia } = getRigidBodyMassData(world, entities[i]);
+            const velocityError = motor.targetVelocity - rigidBody.angularVelocity;
+            const impulse = velocityError / invInertia;
+            const maxImpulse = motor.maxTorque * dt;
+            const clampedImpulse = Math.max(-maxImpulse, Math.min(impulse, maxImpulse));
+            rigidBody.angularVelocity += clampedImpulse * invInertia;
+        }
+    },
+});

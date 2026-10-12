@@ -1,0 +1,49 @@
+import { TimerId } from '../components/timer-component.js';
+/**
+ * Creates an ECS system to handle timers. Each update, it adds
+ * `time.deltaTimeInMilliseconds` to the `elapsed` of every task on every
+ * {@link TimerEcsComponent}, runs each task whose `elapsed` has reached its
+ * `delay`, and then either removes it or, for a repeating task, sets it up
+ * for its next run.
+ * @param time - The time instance used to advance each timer's elapsed time.
+ * @returns The timer ECS system.
+ */
+export const createTimerEcsSystem = (time) => ({
+    query: [TimerId],
+    update: (_world, { components: [timerComponents] }) => {
+        const deltaTime = time.deltaTimeInMilliseconds;
+        for (let i = 0; i < timerComponents.length; i++) {
+            advanceTimerTasks(timerComponents[i].tasks, deltaTime);
+        }
+    },
+});
+const advanceTimerTasks = (tasks, deltaTime) => {
+    for (let i = tasks.length - 1; i >= 0; i--) {
+        const task = tasks[i];
+        if (!advanceTimerTask(task, deltaTime)) {
+            continue;
+        }
+        task.callback();
+        if (shouldRemoveTimerTask(task)) {
+            tasks.splice(i, 1);
+        }
+        else {
+            resetRepeatingTimerTask(task);
+        }
+    }
+};
+const advanceTimerTask = (task, deltaTime) => {
+    task.elapsed += deltaTime;
+    return task.elapsed >= task.delay;
+};
+const shouldRemoveTimerTask = (task) => {
+    if (!task.repeat || task.interval === undefined) {
+        return true;
+    }
+    task.runsSoFar = (task.runsSoFar ?? 0) + 1;
+    return task.maxRuns !== undefined && task.runsSoFar >= task.maxRuns;
+};
+const resetRepeatingTimerTask = (task) => {
+    task.elapsed = 0;
+    task.delay = task.interval ?? 0;
+};

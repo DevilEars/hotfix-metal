@@ -1,0 +1,128 @@
+{
+  "name": "@forge-game-engine/forge",
+  "version": "0.26.1",
+  "type": "module",
+  "exports": {
+    "./animations": {
+      "import": {
+        "types": "./dist/animations/index.d.ts",
+        "default": "./dist/animations/index.js"
+      }
+    },
+    "./asset-loading": {
+      "import": {
+        "types": "./dist/asset-loading/index.d.ts",
+        "default": "./dist/asset-loading/index.js"
+      }
+    },
+    "./audio": {
+      "import": {
+        "types": "./dist/audio/index.d.ts",
+        "default": "./dist/audio/index.js"
+      }
+    },
+    "./common": {
+      "import": {
+        "types": "./dist/common/index.d.ts",
+        "default": "./dist/common/index.js"
+      }
+    },
+    "./ecs": {
+      "import": {
+        "types": "./dist/ecs/index.d.ts",
+        "default": "./dist/ecs/index.js"
+      }
+    },
+    "./events": {
+      "import": {
+        "types": "./dist/events/index.d.ts",
+        "default": "./dist/events/index.js"
+      }
+    },
+    "./input": {
+      "import": {
+        "types": "./dist/input/index.d.ts",
+        "default": "./dist/input/index.js"
+      }
+    },
+    "./lifecycle": {
+      "import": {
+        "types": "./dist/lifecycle/index.d.ts",
+        "default": "./dist/lifecycle/index.js"
+      }
+    },
+    "./math": {
+      "import": {
+        "types": "./dist/math/index.d.ts",
+        "default": "./dist/math/index.js"
+      }
+    },
+    "./particles": {
+      "import": {
+        "types": "./dist/particles/index.d.ts",
+        "default": "./dist/particles/index.js"
+      }
+    },
+    "./physics": {
+      "import": {
+        "types": "./dist/physics/index.d.ts",
+        "default": "./dist/physics/index.js"
+      }
+    },
+    "./rendering": {
+      "import": {
+        "types": "./dist/rendering/index.d.ts",
+        "default": "./dist/rendering/index.js"
+      }
+    },
+    "./states": {
+      "import": {
+        "types": "./dist/states/index.d.ts",
+        "default": "./dist/states/index.js"
+      }
+    },
+    "./storage": {
+      "import": {
+        "types": "./dist/storage/index.d.ts",
+        "default": "./dist/storage/index.js"
+      }
+    },
+    "./text": {
+      "import": {
+        "types": "./dist/text/index.d.ts",
+        "default": "./dist/text/index.js"
+      }
+    },
+    "./timer": {
+      "import": {
+        "types": "./dist/timer/index.d.ts",
+        "default": "./dist/timer/index.js"
+      }
+    },
+    "./ui": {
+      "import": {
+        "types": "./dist/ui/index.d.ts",
+        "default": "./dist/ui/index.js"
+      }
+    },
+    "./utilities": {
+      "import": {
+        "types": "./dist/utilities/index.d.ts",
+        "default": "./dist/utilities/index.js"
+      }
+    },
+    "./fsm": {
+      "import": {
+        "types": "./dist/finite-state-machine/index.d.ts",
+        "default": "./dist/finite-state-machine/index.js"
+      }
+    },
+    "./fonts/default/default.json": "./assets/fonts/default/default.json",
+    "./fonts/default/default.png": "./assets/fonts/default/default.png"
+  },
+  "dependencies": {
+    "@types/imurmurhash": "^0.1.4",
+    "imurmurhash": "^0.1.4",
+    "seedrandom": "^3.0.5"
+  }
+}
