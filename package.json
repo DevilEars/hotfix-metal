@@ -1,7 +1,7 @@
 {
   "name": "hotfix-metal",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "HOTFIX METAL - a run-and-gun demo built on the Forge game engine",
   "scripts": {

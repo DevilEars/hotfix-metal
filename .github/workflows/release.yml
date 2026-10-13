@@ -1,0 +1,52 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach a zip to (e.g. v1.0.0)
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Zip the build
+        run: |
+          cp README.md dist/README.md
+          cat > dist/PLAY.txt <<'EOF'
+          HOTFIX METAL - how to play this download
+
+          Browsers block games opened straight from disk (file://), so serve
+          this folder over HTTP, then open the printed address:
+
+            npx serve .                 (Node)
+            python3 -m http.server      (Python, then http://localhost:8000)
+
+          Or play online: https://devilears.github.io/hotfix-metal/
+          The zip can also be uploaded as-is to itch.io as an HTML5 game.
+          EOF
+          (cd dist && zip -qr "../hotfix-metal-${TAG}.zip" .)
+      - name: Attach to the release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "hotfix-metal-${TAG}.zip" --clobber
+          else
+            flags=()
+            [[ "$TAG" == *-* ]] && flags+=(--prerelease)
+            gh release create "$TAG" "hotfix-metal-${TAG}.zip" --title "$TAG" --generate-notes "${flags[@]}"
+          fi
