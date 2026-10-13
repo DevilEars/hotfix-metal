@@ -104,7 +104,7 @@ export function createPlayerSystem(ctx: Ctx): EcsSystem<[PlayerComponent, Positi
           player.vy = Math.max(MAX_FALL_SPEED, player.vy + GRAVITY * dt);
           position.local.x += player.vx * dt;
           position.local.y = Math.max(0, position.local.y + player.vy * dt);
-          setClip(ctx, entity, assets.clip.player_dead, 200);
+          setClip(ctx, entity, position.local.y > 0 ? assets.clip.player_hurt : assets.clip.player_dead, 200);
 
           if (player.deadTimer <= 0) {
             respawnOrEnd(ctx, player, position);
@@ -201,10 +201,11 @@ export function createPlayerSystem(ctx: Ctx): EcsSystem<[PlayerComponent, Positi
           flip.flipX = player.facing === -1;
         }
 
-        sprite.height = player.crouching ? 1.5 : 2;
         sprite.opacityMultiplier = player.invulnerable > 0 && Math.floor(ctx.time.timeInSeconds * 18) % 2 === 0 ? 0.3 : 1;
 
-        if (!player.onGround) {
+        if (player.crouching) {
+          setClip(ctx, entity, assets.clip.player_crouch, 200);
+        } else if (!player.onGround) {
           setClip(ctx, entity, assets.clip.player_jump, 200);
         } else if (Math.abs(player.vx) > 0.8) {
           setClip(ctx, entity, assets.clip.player_run, 85);

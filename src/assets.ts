@@ -46,11 +46,20 @@ export const textureNames = [
   'ground_top',
   'ground_fill',
   'rack',
+  'rack_l',
+  'rack_r',
   'billboard',
   'sky',
   'stars',
   'skyline_far',
   'skyline_near',
+  'prop_antenna',
+  'prop_box',
+  'prop_box_wide',
+  'prop_hotel',
+  'prop_monitor',
+  'prop_banner_big',
+  'prop_banner_side',
 ] as const;
 export type TextureName = (typeof textureNames)[number];
 
@@ -58,6 +67,8 @@ export type ClipName =
   | 'player_idle'
   | 'player_run'
   | 'player_jump'
+  | 'player_crouch'
+  | 'player_hurt'
   | 'player_dead'
   | 'bug_walk'
   | 'bot_idle'
@@ -136,23 +147,26 @@ export async function loadAssets(renderContext: RenderContext): Promise<Assets> 
     );
   };
 
-  add('player_idle', tex.player, 8, 2, 0);
-  add('player_run', tex.player, 8, 4, 2);
-  add('player_jump', tex.player, 8, 1, 6);
-  add('player_dead', tex.player, 8, 1, 7);
-  add('bug_walk', tex.bug, 4, 4);
-  add('bot_idle', tex.bot, 4, 1, 0);
-  add('bot_walk', tex.bot, 4, 2, 1);
-  add('bot_shoot', tex.bot, 4, 1, 3);
-  add('fly_flap', tex.fly, 2, 2);
-  add('turret_idle', tex.turret, 2, 1, 0);
-  add('turret_fire', tex.turret, 2, 1, 1);
-  add('junior_tied', tex.junior, 4, 2, 0);
-  add('junior_free', tex.junior, 4, 2, 2);
+  // Strip layouts match scripts/make_art.py.
+  add('player_idle', tex.player, 17, 4, 0);
+  add('player_run', tex.player, 17, 8, 4);
+  add('player_jump', tex.player, 17, 2, 12);
+  add('player_crouch', tex.player, 17, 1, 14);
+  add('player_hurt', tex.player, 17, 1, 15);
+  add('player_dead', tex.player, 17, 1, 16);
+  add('bug_walk', tex.bug, 6, 6);
+  add('bot_idle', tex.bot, 7, 1, 0);
+  add('bot_walk', tex.bot, 7, 4, 1);
+  add('bot_shoot', tex.bot, 7, 2, 5);
+  add('fly_flap', tex.fly, 4, 4);
+  add('turret_idle', tex.turret, 3, 1, 0);
+  add('turret_fire', tex.turret, 3, 2, 1);
+  add('junior_tied', tex.junior, 8, 4, 0);
+  add('junior_free', tex.junior, 8, 4, 4);
   add('explosion', tex.explosion, 6, 6);
-  add('boss_idle', tex.boss, 3, 1, 0);
-  add('boss_open', tex.boss, 3, 1, 1);
-  add('boss_rage', tex.boss, 3, 1, 2);
+  add('boss_idle', tex.boss, 6, 2, 0);
+  add('boss_open', tex.boss, 6, 2, 2);
+  add('boss_rage', tex.boss, 6, 2, 4);
 
   return {
     tex,

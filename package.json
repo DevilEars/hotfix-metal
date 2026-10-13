@@ -5,7 +5,7 @@
   "type": "module",
   "description": "HOTFIX METAL - a run-and-gun demo built on the Forge game engine",
   "scripts": {
-    "assets": "python3 scripts/make_art.py && python3 scripts/make_audio.py",
+    "assets": "python3 scripts/import_env.py && python3 scripts/make_art.py && python3 scripts/make_audio.py",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

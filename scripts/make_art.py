@@ -1,465 +1,466 @@
 #!/usr/bin/env python3
-"""Generates the original pixel art for HOTFIX METAL.
+"""Draws HOTFIX METAL's original character art.
 
-Everything here is drawn from scratch with rectangles: no assets from any
-existing game. Re-run with `npm run assets`. Sprites face right and stand on
-the bottom edge of their cell (pivot bottom-centre in the engine).
+The cast (dev hero, juniors, bugs, bots, heisenbugs, the merge-conflict
+turret, the mainframe boss, pickups) is drawn from scratch in code with
+scripts/pixel.py: shaded parts, posed limbs and selective outlines. The
+environment comes from the CC0 Warped City pack (scripts/import_env.py).
+
+Sprites face right and stand on the bottom row of their cell (pivot
+bottom-centre in the engine). Re-run with `npm run assets`.
 """
 import math
 import os
-import random
 
-from PIL import Image, ImageDraw
+from PIL import Image
+
+from pixel import INK, Sprite, ellipse, limb, mix, poly, polar, ramp, rect, rgb, rrect, strip, union
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'art')
 os.makedirs(OUT, exist_ok=True)
 
-# Palette ------------------------------------------------------------------
-OUTLINE = (14, 16, 32, 255)
-SKIN = (240, 190, 150, 255)
-SKIN_D = (205, 150, 115, 255)
-HAIR = (40, 30, 50, 255)
-BLUE = (30, 110, 230, 255)       # Entelect-style electric blue (approximate)
-BLUE_D = (18, 70, 160, 255)
-BLUE_L = (90, 160, 255, 255)
-LIME = (165, 194, 73, 255)       # accent seen on entelect.co.za
-ORANGE = (217, 119, 87, 255)     # Claude coral
-ORANGE_D = (160, 80, 55, 255)
-JEANS = (45, 52, 88, 255)
-JEANS_D = (30, 36, 64, 255)
-WHITE = (240, 244, 255, 255)
-GREY = (150, 160, 180, 255)
-GREY_D = (90, 98, 120, 255)
-GREY_DD = (50, 56, 74, 255)
-RED = (230, 60, 70, 255)
-RED_D = (150, 30, 45, 255)
-GREEN = (80, 220, 130, 255)
-GREEN_D = (40, 140, 90, 255)
-YELLOW = (255, 220, 90, 255)
-PURPLE = (150, 90, 220, 255)
-PURPLE_D = (90, 50, 150, 255)
 
-
-def new(w, h, color=(0, 0, 0, 0)):
-    img = Image.new('RGBA', (w, h), color)
-    return img, ImageDraw.Draw(img)
-
-
-def rect(d, x0, y0, x1, y1, c):
-    d.rectangle([x0, y0, x1, y1], fill=c)
-
-
-def outline(img, color=OUTLINE):
-    """Adds a 1px outline around every opaque shape (4-neighbour)."""
-    w, h = img.size
-    src = img.load()
-    out = img.copy()
-    dst = out.load()
-    for y in range(h):
-        for x in range(w):
-            if src[x, y][3] == 0:
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                    nx, ny = x + dx, y + dy
-                    if 0 <= nx < w and 0 <= ny < h and src[nx, ny][3] > 0:
-                        dst[x, y] = color
-                        break
-    return out
-
-
-def sheet(frames, path, do_outline=True):
-    w, h = frames[0].size
-    out = Image.new('RGBA', (w * len(frames), h), (0, 0, 0, 0))
-    for i, f in enumerate(frames):
-        out.paste(outline(f) if do_outline else f, (i * w, 0))
-    out.save(os.path.join(OUT, path))
-
-
-# Player: a developer in a blue hoodie carrying a laptop cannon --------------
-def player_frame(kind, t):
-    img, d = new(32, 32)
-    bob = 1 if (kind == 'idle' and t == 1) else 0
-    # legs
-    if kind == 'run':
-        a = [(0, 0), (2, -1), (0, 0), (-2, -1)][t]
-        b = [(0, 0), (-2, -1), (0, 0), (2, -1)][t]
-    elif kind == 'jump':
-        a, b = (2, -3), (-2, -1)
-    else:
-        a, b = (0, 0), (0, 0)
-    if kind == 'dead':
-        rect(d, 6, 24, 24, 29, BLUE)
-        rect(d, 2, 22, 8, 28, SKIN)
-        rect(d, 3, 21, 8, 23, HAIR)
-        rect(d, 22, 25, 28, 29, JEANS)
-        rect(d, 10, 15, 22, 24, GREY)
-        rect(d, 11, 16, 21, 18, GREEN_D)
-        return img
-    for off, col in ((b, JEANS_D), (a, JEANS)):
-        lx = 13 + off[0]
-        ly = 22 + bob
-        rect(d, lx, ly, lx + 4, 28 + off[1], col)
-        rect(d, lx, 29 + off[1], lx + 6, 30 + off[1], WHITE)
-    # torso
-    rect(d, 11, 13 + bob, 20, 22 + bob, BLUE)
-    rect(d, 11, 20 + bob, 20, 22 + bob, BLUE_D)
-    rect(d, 14, 15 + bob, 17, 16 + bob, BLUE_L)          # hoodie drawstrings
-    # head
-    rect(d, 12, 6 + bob, 19, 12 + bob, SKIN)
-    rect(d, 12, 5 + bob, 19, 7 + bob, HAIR)
-    rect(d, 11, 6 + bob, 12, 11 + bob, HAIR)
-    rect(d, 17, 8 + bob, 18, 9 + bob, OUTLINE)            # eye
-    rect(d, 10, 7 + bob, 20, 8 + bob, ORANGE)             # headphone band
-    rect(d, 10, 8 + bob, 12, 11 + bob, ORANGE_D)          # ear cup
-    # laptop cannon (screen glows green)
-    rect(d, 17, 15 + bob, 29, 19 + bob, GREY)
-    rect(d, 18, 16 + bob, 28, 17 + bob, GREEN)
-    rect(d, 26, 14 + bob, 30, 15 + bob, GREY_D)
-    rect(d, 15, 17 + bob, 18, 20 + bob, SKIN)             # hand
-    return img
-
-
-player_frames = [player_frame('idle', 0), player_frame('idle', 1)]
-player_frames += [player_frame('run', i) for i in range(4)]
-player_frames += [player_frame('jump', 0), player_frame('dead', 0)]
-sheet(player_frames, 'player.png')
-
-
-# Bug: a beetle that crawls along the floor --------------------------------
-def bug_frame(t):
-    img, d = new(32, 32)
-    lift = [0, 1, 0, 1][t]
-    body_y = 20 - lift
-    rect(d, 7, body_y, 25, body_y + 8, GREEN_D)
-    rect(d, 8, body_y - 2, 24, body_y + 6, GREEN)
-    rect(d, 10, body_y, 14, body_y + 2, GREEN_D)         # shell spots
-    rect(d, 17, body_y + 1, 21, body_y + 3, GREEN_D)
-    rect(d, 24, body_y - 1, 29, body_y + 4, RED)          # head
-    rect(d, 27, body_y, 28, body_y + 1, WHITE)            # eye
-    rect(d, 28, body_y - 4, 29, body_y - 2, GREY)         # antenna
-    for i, lx in enumerate((9, 14, 19, 23)):
-        o = 1 if (i + t) % 2 else 0
-        rect(d, lx, body_y + 7, lx + 1, 29 + o - lift + lift, GREY_D)
-    return img
-
-
-sheet([bug_frame(i) for i in range(4)], 'bug.png')
-
-
-# Rogue bot: a walking cron job that shoots -------------------------------------
-def bot_frame(kind, t):
-    img, d = new(32, 32)
-    step = (0, 2)[t % 2] if kind == 'walk' else 0
-    rect(d, 11 + step, 22, 14 + step, 29, GREY_D)
-    rect(d, 17 - step, 22, 20 - step, 29, GREY_D)
-    rect(d, 10 + step, 29, 15 + step, 30, GREY_DD)
-    rect(d, 16 - step, 29, 21 - step, 30, GREY_DD)
-    rect(d, 9, 11, 22, 22, GREY)
-    rect(d, 9, 19, 22, 22, GREY_D)
-    rect(d, 12, 13, 19, 17, GREY_DD)                     # chest panel
-    rect(d, 13, 14, 14, 15, RED)
-    rect(d, 17, 14, 18, 15, RED)
-    rect(d, 11, 3, 20, 10, GREY)                          # head
-    rect(d, 13, 5, 19, 7, RED)                            # visor
-    rect(d, 15, 0, 16, 3, GREY_D)                         # antenna
-    rect(d, 15, 0, 16, 1, RED)
-    rect(d, 22, 14, 30, 17, GREY_DD)                      # blaster
-    if kind == 'shoot':
-        rect(d, 29, 13, 31, 18, YELLOW)
-    return img
-
-
-sheet([bot_frame('idle', 0), bot_frame('walk', 0), bot_frame('walk', 1),
-       bot_frame('shoot', 0)], 'bot.png')
-
-
-# Heisenbug: a flying moth that vanishes when you look at it ---------------
-def fly_frame(t):
-    img, d = new(32, 32)
-    wing_up = t == 0
-    wy = 8 if wing_up else 13
-    rect(d, 9, wy, 15, wy + 6, (200, 210, 255, 255))
-    rect(d, 17, wy, 23, wy + 6, (200, 210, 255, 255))
-    rect(d, 10, wy + 1, 14, wy + 4, (230, 235, 255, 255))
-    rect(d, 18, wy + 1, 22, wy + 4, (230, 235, 255, 255))
-    rect(d, 12, 14, 20, 24, PURPLE)
-    rect(d, 12, 20, 20, 24, PURPLE_D)
-    rect(d, 14, 17, 15, 18, YELLOW)
-    rect(d, 17, 17, 18, 18, YELLOW)
-    rect(d, 15, 25, 16, 27, GREY)
-    return img
-
-
-sheet([fly_frame(0), fly_frame(1)], 'fly.png')
-
-
-# Merge-conflict turret: a box that shows <<<<<<< ======= >>>>>>> ------------
-def turret_frame(firing):
-    img, d = new(32, 32)
-    rect(d, 4, 14, 27, 30, GREY_D)
-    rect(d, 4, 14, 27, 17, GREY)
-    rect(d, 6, 19, 25, 27, GREY_DD)
-    # three lines of conflict markers: red '<', white '=', green '>'
-    for i, (col, mark) in enumerate(((RED, '<'), (WHITE, '='), (GREEN, '>'))):
-        y = 20 + i * 3
-        for k in range(5):
-            x = 8 + k * 3
-            if mark == '=':
-                rect(d, x, y, x + 1, y, col)
-            elif mark == '<':
-                d.point((x + 1, y), fill=col)
-            else:
-                d.point((x, y), fill=col)
-    rect(d, 12, 5, 19, 13, GREY)                          # cannon housing
-    rect(d, 13, 6, 18, 8, RED if firing else RED_D)
-    rect(d, 19, 8, 29, 11, GREY_DD)                       # barrel
-    if firing:
-        rect(d, 28, 6, 31, 13, YELLOW)
-    return img
-
-
-sheet([turret_frame(False), turret_frame(True)], 'turret.png')
-
-
-# Junior dev (the hostage): tied up with ethernet cable, then freed -----------
-def junior_frame(kind, t):
-    img, d = new(32, 32)
-    sway = t % 2
-    shirt = LIME
-    if kind == 'tied':
-        rect(d, 12, 24, 19, 30, JEANS)
-        rect(d, 11, 14, 20, 24, shirt)
-        for y in (16, 19, 22):                            # cable wraps
-            rect(d, 11, y, 20, y, ORANGE)
-        rect(d, 12, 5 + sway, 19, 12 + sway, SKIN)
-        rect(d, 12, 4 + sway, 19, 6 + sway, (120, 70, 40, 255))
-        rect(d, 13, 8 + sway, 14, 9 + sway, OUTLINE)
-        rect(d, 17, 8 + sway, 18, 9 + sway, OUTLINE)
-        rect(d, 14, 11 + sway, 17, 11 + sway, RED_D)      # worried mouth
-        rect(d, 21, 3 + sway, 23, 5 + sway, WHITE)        # "help!" bubble dot
-    else:
-        a = [(0, 0), (2, -1)][t]
-        b = [(0, 0), (-2, -1)][t]
-        for off, col in ((b, JEANS_D), (a, JEANS)):
-            rect(d, 13 + off[0], 22, 17 + off[0], 28 + off[1], col)
-            rect(d, 13 + off[0], 29 + off[1], 19 + off[0], 30 + off[1], WHITE)
-        rect(d, 11, 13, 20, 22, shirt)
-        rect(d, 12, 5, 19, 12, SKIN)
-        rect(d, 12, 4, 19, 6, (120, 70, 40, 255))
-        rect(d, 17, 8, 18, 9, OUTLINE)
-        rect(d, 14, 11, 17, 11, OUTLINE)
-        rect(d, 19, 10, 22, 11, SKIN)
-        rect(d, 21, 5, 22, 10, SKIN)                      # waving arm
-    return img
-
-
-sheet([junior_frame('tied', 0), junior_frame('tied', 1),
-       junior_frame('free', 0), junior_frame('free', 1)], 'junior.png')
-
-
-# Pickups (16x16): Heavy Commit, Claude Spark, Revert Grenade, Coffee, Points -
-def pickup_frame(kind):
-    img, d = new(16, 16)
-    rect(d, 1, 1, 14, 14, GREY_DD)
-    rect(d, 2, 2, 13, 13, GREY_D)
-    if kind == 'heavy':                                   # "H"
-        rect(d, 4, 4, 5, 11, YELLOW)
-        rect(d, 10, 4, 11, 11, YELLOW)
-        rect(d, 4, 7, 11, 8, YELLOW)
-    elif kind == 'claude':                                # 8-ray spark
-        for ang in range(0, 360, 45):
-            for r in range(1, 6):
-                x = 8 + round(math.cos(math.radians(ang)) * r)
-                y = 8 + round(math.sin(math.radians(ang)) * r)
-                d.point((x, y), fill=ORANGE)
-        rect(d, 7, 7, 8, 8, WHITE)
-    elif kind == 'grenade':                               # revert arrow
-        rect(d, 5, 5, 10, 6, LIME)
-        rect(d, 4, 6, 5, 9, LIME)
-        rect(d, 5, 9, 10, 10, LIME)
-        rect(d, 9, 3, 10, 8, LIME)
-        rect(d, 8, 4, 8, 7, LIME)
-    elif kind == 'coffee':
-        rect(d, 4, 6, 10, 12, WHITE)
-        rect(d, 11, 7, 12, 10, WHITE)
-        rect(d, 5, 7, 9, 8, (110, 70, 40, 255))
-        rect(d, 5, 3, 5, 5, GREY)
-        rect(d, 8, 2, 8, 5, GREY)
-    else:                                                 # story points
-        rect(d, 5, 3, 10, 12, YELLOW)
-        rect(d, 4, 5, 11, 10, YELLOW)
-        rect(d, 7, 5, 8, 10, (255, 245, 180, 255))
-    return img
-
-
-sheet([pickup_frame(k) for k in ('heavy', 'claude', 'grenade', 'coffee', 'points')],
-      'pickups.png')
-
-
-# Explosion (32x32, 6 frames) -------------------------------------------------
-def explosion_frame(t):
-    img, d = new(32, 32)
-    r = [4, 9, 13, 15, 14, 11][t]
-    cols = [WHITE, YELLOW, (255, 150, 60, 255), (210, 70, 50, 255),
-            (110, 50, 60, 255), (60, 40, 50, 255)]
-    rnd = random.Random(7 + t)
-    for ring, col in zip(range(r, 0, -3), cols[t:] + cols):
-        for _ in range(90):
-            ang = rnd.random() * math.tau
-            rad = rnd.random() * ring
-            x = 16 + int(math.cos(ang) * rad)
-            y = 17 + int(math.sin(ang) * rad)
-            rect(d, x - 1, y - 1, x + 1, y + 1, col)
-    if t >= 3:                                            # debris
-        for _ in range(8):
-            x, y = rnd.randint(4, 27), rnd.randint(4, 27)
-            d.point((x, y), fill=GREY)
-    return img
-
-
-sheet([explosion_frame(i) for i in range(6)], 'explosion.png', do_outline=False)
-
-
-# Boss: THE MONOLITH - a 15-year-old mainframe that nobody dares to touch -----
-def boss_frame(state):
-    img, d = new(96, 96)
-    body = GREY_D if state != 'rage' else (130, 70, 80, 255)
-    rect(d, 14, 14, 82, 94, GREY_DD)
-    rect(d, 16, 16, 80, 92, body)
-    rect(d, 16, 16, 80, 22, GREY)                          # top plate
-    # rack slots with blinking LEDs
-    for i, y in enumerate(range(28, 84, 9)):
-        rect(d, 22, y, 74, y + 5, GREY_DD)
-        for k in range(6):
-            lit = (i + k + (state != 'idle')) % 3 == 0
-            col = RED if state == 'rage' else (GREEN if lit else GREEN_D)
-            rect(d, 26 + k * 5, y + 2, 27 + k * 5, y + 3, col)
-        rect(d, 54, y + 1, 72, y + 4, (30, 36, 52, 255))
-    # the big eye: a CRT that has seen things
-    rect(d, 30, 4, 66, 30, GREY_DD)
-    rect(d, 33, 7, 63, 27, (20, 40, 36, 255))
-    eye = RED if state == 'rage' else GREEN
-    rect(d, 40, 12, 56, 22, eye)
-    rect(d, 46, 14, 50, 20, (20, 24, 30, 255))
-    rect(d, 36, 8, 40, 9, eye)
-    rect(d, 56, 8, 60, 9, eye)
-    # cable-arms
-    rect(d, 2, 40, 14, 46, ORANGE_D)
-    rect(d, 0, 46, 8, 70, ORANGE_D)
-    rect(d, 82, 40, 94, 46, ORANGE_D)
-    rect(d, 88, 46, 96 - 1, 70, ORANGE_D)
-    # sticky note: "DO NOT TOUCH"
-    rect(d, 60, 50, 74, 62, YELLOW)
-    rect(d, 62, 53, 72, 53, OUTLINE)
-    rect(d, 62, 56, 70, 56, OUTLINE)
-    rect(d, 62, 59, 72, 59, OUTLINE)
-    return img
-
-
-sheet([boss_frame('idle'), boss_frame('open'), boss_frame('rage')], 'boss.png')
-
-
-# Environment tiles ------------------------------------------------------------
-def ground_top():
-    img, d = new(16, 16, (24, 30, 52, 255))
-    rect(d, 0, 0, 15, 2, LIME)
-    rect(d, 0, 3, 15, 3, (110, 140, 50, 255))
-    for x in (2, 9):
-        rect(d, x, 7, x + 4, 7, (50, 150, 120, 255))
-        rect(d, x + 4, 7, x + 4, 11, (50, 150, 120, 255))
-        d.point((x + 4, 12), fill=GREEN)
-    return img
-
-
-def ground_fill():
-    img, d = new(16, 48, (20, 24, 44, 255))
-    rnd = random.Random(3)
-    for _ in range(18):
-        x, y = rnd.randint(0, 12), rnd.randint(0, 44)
-        rect(d, x, y, x + rnd.randint(2, 5), y, (40, 52, 90, 255))
-    for y in (15, 31):
-        rect(d, 0, y, 15, y, (14, 18, 34, 255))
-    return img
-
-
-def rack_tile():
-    img, d = new(16, 16, GREY_DD)
-    rect(d, 0, 0, 15, 1, GREY)
-    rect(d, 0, 14, 15, 15, (30, 34, 50, 255))
-    for k in range(4):
-        rect(d, 2, 3 + k * 3, 13, 4 + k * 3, (30, 36, 54, 255))
-        d.point((3, 3 + k * 3), fill=GREEN if k % 2 else ORANGE)
-        d.point((5, 3 + k * 3), fill=GREEN_D)
-    return img
-
-
-ground_top().save(os.path.join(OUT, 'ground_top.png'))
-ground_fill().save(os.path.join(OUT, 'ground_fill.png'))
-rack_tile().save(os.path.join(OUT, 'rack.png'))
-
-
-def billboard():
-    img, d = new(160, 56, (12, 18, 40, 255))
-    rect(d, 0, 0, 159, 3, BLUE)
-    rect(d, 0, 52, 159, 55, BLUE)
-    rect(d, 0, 0, 3, 55, BLUE)
-    rect(d, 156, 0, 159, 55, BLUE)
-    for x in range(8, 152, 12):
-        d.point((x, 8), fill=BLUE_L)
-        d.point((x, 47), fill=BLUE_L)
-    return img
-
-
-billboard().save(os.path.join(OUT, 'billboard.png'))
-
-
-# Backdrops -------------------------------------------------------------------
-def sky():
-    img, d = new(8, 240)
-    top, bot = (8, 10, 30), (40, 28, 70)
-    for y in range(240):
-        t = y / 239
-        d.line([(0, y), (7, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)) + (255,))
-    img = img.resize((8, 240))
-    img.save(os.path.join(OUT, 'sky.png'))
-
-
-def stars():
-    img, d = new(512, 240)
-    rnd = random.Random(11)
-    for _ in range(90):
-        x, y = rnd.randint(0, 511), rnd.randint(0, 150)
-        c = rnd.choice([(255, 255, 255, 255), (150, 180, 255, 255), (255, 200, 160, 255)])
-        d.point((x, y), fill=c)
-    img.save(os.path.join(OUT, 'stars.png'))
-
-
-def skyline(name, seed, base_y, min_h, max_h, body, window, density):
-    img, d = new(512, 240)
-    rnd = random.Random(seed)
-    x = 0
-    while x < 512:
-        w = rnd.randint(28, 56)
-        w = min(w, 512 - x)
-        h = rnd.randint(min_h, max_h)
-        top = base_y - h
-        rect(d, x, top, x + w - 1, 239, body)
-        rect(d, x, top, x + w - 1, top, tuple(min(255, c + 25) for c in body[:3]) + (255,))
-        for wy in range(top + 6, base_y - 4, 8):
-            for wx in range(x + 4, x + w - 5, 7):
-                if rnd.random() < density:
-                    rect(d, wx, wy, wx + 2, wy + 3, window)
-        if rnd.random() < 0.3:
-            rect(d, x + w // 2, top - 10, x + w // 2, top, body)
-            d.point((x + w // 2, top - 11), fill=RED)
-        x += w + rnd.randint(0, 3)
+def save(img, name):
     img.save(os.path.join(OUT, name))
 
 
-sky()
-stars()
-skyline('skyline_far.png', 5, 215, 60, 150, (22, 26, 62, 255), (70, 110, 200, 255), 0.35)
-skyline('skyline_near.png', 9, 238, 40, 95, (34, 40, 84, 255), (255, 200, 110, 255), 0.25)
+# Palette ------------------------------------------------------------------------------
+ENTELECT_BLUE = ramp('#1e6fe0')
+LIME = ramp('#a5c249')
+CORAL = ramp('#d97757')          # Claude coral
+SKIN = ramp('#f2bf98')
+HAIR = ramp('#4a3157')
+HAIR_BROWN = ramp('#8a5634')
+DENIM = ramp('#3d4c86')
+KHAKI = ramp('#6b6a8c')
+SHOE = ramp('#dcdcec')
+METAL = ramp('#8e98ba')
+GUNMETAL = ramp('#4a5070')
+DARK = ramp('#2c2a48')
+RED = ramp('#ec4a5c')
+GREEN = ramp('#58d68a')
+TEAL = ramp('#2fb8c8')
+PURPLE = ramp('#9858d8')
+WING = ramp('#cbd2ff')
+YELLOW = ramp('#ffd25a')
 
-# Brand badges drawn as plain placeholders; swap in official logos under
-# public/brand/ (see README).
-print('art written to', os.path.abspath(OUT))
+WHITE = (250, 248, 240)
+EYE = (34, 18, 48)
+GLOW_GREEN = (150, 255, 170)
+GLOW_GREEN_HI = (225, 255, 225)
+GLOW_RED = (255, 90, 100)
+GLOW_RED_HI = (255, 210, 200)
+FLASH = (255, 246, 190)
+FLASH_HOT = (255, 190, 80)
+
+
+def darker(colors, t=0.3):
+    """The same ramp pushed into shade (far-side limbs)."""
+    return [mix(c, INK, t) for c in colors]
+
+
+# --- Humans: the dev hero and the junior devs ---------------------------------------------
+HERO = dict(top=ENTELECT_BLUE, legs=DENIM, hair=HAIR, phones=True)
+JUNIOR = dict(top=LIME, legs=KHAKI, hair=HAIR_BROWN, phones=False)
+
+THIGH, SHIN = 4, 5
+
+
+def leg(s, hip, thigh_deg, knee_deg, colors, ground=47):
+    knee = polar(hip, THIGH, thigh_deg)
+    ankle = polar(knee, SHIN, thigh_deg - knee_deg)
+    ankle = (ankle[0], min(ankle[1], ground - 2))
+    s.part(limb([hip, knee, ankle], 4), colors)
+    ax, ay = round(ankle[0]), round(ankle[1])
+    s.part(rrect(ax - 2, ay, ax + 3, ay + 2, 1), SHOE if colors[2] != darker(SHOE)[2] else darker(SHOE))
+    s.hline(ax - 2, ax + 3, ay + 2, mix(SHOE[0], INK, 0.4))
+
+
+def head(s, x, y, look, dead=False):
+    """Head with the face looking right; (x, y) is the top-left of the skull."""
+    s.part(ellipse(x + 1, y + 1, x + 11, y + 11), SKIN)
+    s.part(union(ellipse(x, y - 1, x + 10, y + 5), rect(x, y + 2, x + 4, y + 8),
+                 poly([(x + 2, y), (x + 5, y - 3), (x + 6, y)]),
+                 poly([(x + 6, y - 1), (x + 10, y - 2), (x + 9, y + 2)]),
+                 poly([(x + 7, y + 2), (x + 11, y + 3), (x + 9, y + 5)])), look['hair'])
+    s.dots([(x + 3, y + 1), (x + 4, y)], look['hair'][3])  # shine
+    if dead:
+        for d in (0, 1):
+            s.dot(x + 7 + d, y + 6 + d, EYE)
+            s.dot(x + 8 - d, y + 6 + d, EYE)
+    else:
+        s.vline(x + 8, y + 6, y + 7, EYE)
+        s.dot(x + 8, y + 6, WHITE)
+        s.hline(x + 7, x + 9, y + 5, look['hair'][0])        # brow
+        s.dot(x + 10, y + 8, SKIN[1])                       # nose shadow
+        s.hline(x + 7, x + 8, y + 10, SKIN[0])              # mouth
+    if look['phones']:
+        s.part(limb([(x + 3, y + 5), (x + 3, y), (x + 5, y - 2), (x + 8, y - 2)], 2), darker(CORAL, 0.15), contact=False)
+        s.part(rrect(x + 2, y + 4, x + 5, y + 8, 1), CORAL)
+        s.dot(x + 3, y + 5, CORAL[3])
+
+
+def cannon(s, x, y, kick=0):
+    """The commit cannon: grip at (x, y). Barrel tip near x + 19."""
+    x -= kick
+    s.part(rrect(x - 3, y - 3, x + 13, y + 1, 1), METAL)            # body
+    s.part(rect(x + 13, y - 2, x + 19, y - 1), GUNMETAL)            # barrel
+    s.part(rect(x + 5, y + 1, x + 7, y + 4), GUNMETAL)              # magazine
+    s.part(rect(x - 6, y - 2, x - 2, y), GUNMETAL)                  # stock
+    s.hline(x, x + 8, y - 2, GLOW_GREEN)                            # status screen
+    s.dot(x + 1, y - 2, GLOW_GREEN_HI)
+    s.hline(x - 2, x + 12, y - 3, METAL[3])
+    s.dot(x + 18, y - 2, GUNMETAL[3])
+
+
+def dev(look, pose='idle', t=0, gun=True):
+    s = Sprite(48, 48)
+    bob, hip_y, lean = 0, 36, 0
+    legs = {'idle': ((6, 0), (-5, 0)), 'jump': ((55, 95), (-15, 45))}
+    if pose == 'idle':
+        bob = 1 if t in (1, 2) else 0
+        (a1, k1), (a2, k2) = legs['idle']
+    elif pose == 'run':
+        phase = t / 8 * math.tau
+        bob = 1 if t % 4 in (0, 1) else 0
+        a1, a2 = 34 * math.sin(phase), 34 * math.sin(phase + math.pi)
+        k1 = 12 + 55 * max(0.0, math.cos(phase))
+        k2 = 12 + 55 * max(0.0, math.cos(phase + math.pi))
+    elif pose == 'jump':
+        bob = -1 - t
+        (a1, k1), (a2, k2) = legs['jump']
+    elif pose == 'crouch':
+        bob, lean = 7, 1
+    hip = (23, hip_y + bob)
+    top = hip_y - 9 + bob              # torso top
+    if pose == 'crouch':
+        hip = (23, 43)
+        s.part(limb([hip, (19, 45), (17, 45)], 4), darker(look['legs']))
+        s.part(rrect(14, 44, 18, 46, 1), darker(SHOE))
+        s.part(limb([hip, (28, 42), (29, 45)], 4), look['legs'])
+        s.part(rrect(27, 44, 33, 46, 1), SHOE)
+        s.hline(27, 33, 47, mix(SHOE[0], INK, 0.4))
+    else:
+        leg(s, hip, a2, k2, darker(look['legs']))
+    # far arm reaches for the foregrip
+    if gun:
+        s.part(limb([(21 + lean, top + 2), (28 + lean, top + 6), (34 + lean, top + 5)], 3), darker(look['top']))
+    else:
+        s.part(limb([(21, top + 2), (19, top + 6), (20, top + 9)], 3), darker(look['top']))
+    if pose != 'crouch':
+        leg(s, hip, a1, k1, look['legs'])
+    # torso: hoodie or shirt with a hood bump behind the neck
+    s.part(union(rrect(18 + lean, top, 28 + lean, top + 10, 3), ellipse(16 + lean, top - 2, 22 + lean, top + 3)), look['top'])
+    s.hline(19 + lean, 27 + lean, top + 9, look['top'][0])
+    if look['phones']:
+        s.vline(24 + lean, top + 2, top + 4, WHITE)   # drawstrings
+        s.vline(26 + lean, top + 2, top + 3, WHITE)
+    else:
+        s.vline(25 + lean, top + 1, top + 5, CORAL[2])  # lanyard
+        s.part(rect(24 + lean, top + 5, 26 + lean, top + 7), [WHITE] * 4)
+    head(s, 18 + lean, top - 11, look)
+    if gun:
+        cannon(s, 27 + lean, top + 5)
+        s.part(limb([(23 + lean, top + 2), (24 + lean, top + 6), (27 + lean, top + 5)], 3), look['top'])
+        s.part(rect(27 + lean, top + 4, 28 + lean, top + 5), SKIN)
+        s.part(rect(34 + lean, top + 4, 35 + lean, top + 5), darker(SKIN, 0.2))
+    else:
+        s.part(limb([(24, top + 2), (27, top + 6), (28, top + 9)], 3), look['top'])
+    return s
+
+
+def rotated(sprite, degrees):
+    """Rotates the un-outlined sprite (fall poses), then re-centres it on the
+    cell's bottom edge so nothing is clipped."""
+    big = Image.new('RGBA', (96, 96), (0, 0, 0, 0))
+    big.alpha_composite(sprite.image(outline=False), (24, 24))
+    big = big.rotate(degrees, resample=Image.NEAREST)
+    x0, y0, x1, y1 = big.getbbox()
+    dx, dy = 24 - (x0 + x1) // 2, 46 - y1
+    out = Sprite(48, 48)
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            p = big.getpixel((x, y))
+            if p[3]:
+                out.dot(x + dx, y + dy + 1, p[:3])
+    return out
+
+
+hero = []
+hero += [dev(HERO, 'idle', t) for t in range(4)]       # 0-3 idle
+hero += [dev(HERO, 'run', t) for t in range(8)]        # 4-11 run
+hero += [dev(HERO, 'jump', t) for t in range(2)]       # 12-13 jump
+hero += [dev(HERO, 'crouch')]                          # 14 crouch
+hero += [rotated(dev(HERO, 'jump', 0, gun=False), 28), rotated(dev(HERO, 'idle', 0, gun=False), 90)]  # 15-16 dead
+save(strip(hero), 'player.png')
+
+
+def junior_tied(t):
+    s = Sprite(48, 48)
+    sway = (0, 1, 1, 0)[t]
+    top = 27
+    leg(s, (23, 36), -4, 0, darker(KHAKI))
+    leg(s, (23, 36), 4, 0, KHAKI)
+    s.part(union(rrect(18, top, 28, top + 10, 3), ellipse(16, top - 2, 22, top + 3)), LIME)
+    s.hline(19, 27, top + 9, LIME[0])
+    # ethernet cable wrapped round the arms
+    for y in (top + 3, top + 6):
+        s.part(limb([(17, y), (29, y + 1)], 2), CORAL, contact=False)
+    s.part(rect(28, top + 6, 30, top + 8), [rgb('#f4f4f4')] * 4)  # RJ45 plug
+    head(s, 18 + sway, top - 11, JUNIOR)
+    s.dots([(28 + sway, top - 8), (28 + sway, top - 7)], WHITE if t % 2 else rgb('#9fd8ff'))  # sweat
+    if t >= 2:  # "!" bubble
+        s.part(rrect(31, 11, 37, 18, 2), [WHITE] * 4, contact=False)
+        s.vline(34, 12, 15, RED[2])
+        s.dot(34, 17, RED[2])
+    return s
+
+
+def junior_free(t):
+    s = dev(JUNIOR, 'run', t * 2, gun=False)
+    wave = (0, 2, 0, 2)[t]
+    top = 27 + (1 if (t * 2) % 4 in (0, 1) else 0)
+    s.part(limb([(25, top + 2), (29, top - 2), (30 - wave // 2, top - 7)], 3), LIME)
+    s.part(rect(29 - wave // 2, top - 9, 31 - wave // 2, top - 7), SKIN)
+    return s
+
+
+save(strip([junior_tied(t) for t in range(4)] + [junior_free(t) for t in range(4)]), 'junior.png')
+
+
+# --- Bug: a beetle with a </> on its shell -------------------------------------------
+def bug(t):
+    s = Sprite(32, 32)
+    lift = (0, 1, 0, 0, 1, 0)[t]
+    by = 18 - lift
+    swing = (-2, 0, 2, 2, 0, -2)
+    for i, lx in enumerate((10, 15, 20)):               # far legs
+        sw = swing[(t + i * 2 + 3) % 6]
+        s.part(limb([(lx, by + 6), (lx + sw - 2, by + 9), (lx + sw - 1, 30)], 1), darker(GREEN, 0.6))
+    s.part(ellipse(5, by, 23, by + 9), GREEN)
+    s.part(ellipse(20, by + 2, 28, by + 9), RED)          # head
+    s.dots([(25, by + 5), (26, by + 5)], WHITE)
+    s.dot(26, by + 6, EYE)
+    s.part(limb([(24, by + 3), (27, by - 2), (29, by - 3 + lift)], 1), DARK, contact=False)
+    s.part(limb([(22, by + 3), (23, by - 3), (25, by - 5 + lift)], 1), darker(DARK), contact=False)
+    s.dots([(28, by + 9), (29, by + 8)], RED[0])           # mandible
+    # shell seam, shine and a "</>" glyph
+    s.vline(14, by + 1, by + 9, GREEN[0])
+    s.dots([(8, by + 2), (9, by + 2), (8, by + 3)], GREEN[3])
+    lt = [(9, by + 5), (8, by + 6), (9, by + 7)]
+    slash = [(12, by + 4), (12, by + 5), (11, by + 6), (11, by + 7)]
+    gt = [(16, by + 5), (17, by + 6), (16, by + 7)]
+    s.dots(lt + slash + gt, GREEN[0])
+    for i, lx in enumerate((10, 15, 20)):               # near legs
+        sw = swing[(t + i * 2) % 6]
+        s.part(limb([(lx, by + 7), (lx + sw + 2, by + 10), (lx + sw + 1, 30)], 1), darker(GREEN, 0.45))
+    return s
+
+
+save(strip([bug(t) for t in range(6)]), 'bug.png')
+
+
+# --- Heisenbug: a moth that is never quite where you look ---------------------------------
+def fly(t):
+    s = Sprite(32, 32)
+    hover = (0, -1, 0, 1)[t]
+    tip_y = (-9, -4, 4, -4)[t]           # wing tip height relative to the shoulder
+    cx, cy = 15, 17 + hover
+    for side, col in ((-1, darker(WING, 0.2)), (1, WING)):
+        tx, ty = cx - 7 + side * 2, cy - 2 + tip_y + (1 if side < 0 else 0)
+        s.part(poly([(cx, cy - 2), (tx - 3, ty - 3), (tx - 1, ty + 4), (cx + 1, cy + 2)]), col, contact=False)
+        s.dots([(tx, ty), (tx + 1, ty + 1), (tx + 2, ty + 1)], WING[0])   # vein
+    s.part(ellipse(cx - 2, cy - 3, cx + 5, cy + 8), PURPLE)            # abdomen
+    s.hline(cx - 1, cx + 3, cy + 2, PURPLE[0])
+    s.hline(cx - 1, cx + 3, cy + 5, PURPLE[0])
+    s.part(ellipse(cx + 2, cy - 7, cx + 9, cy - 1), PURPLE)            # head
+    s.part(ellipse(cx + 5, cy - 6, cx + 8, cy - 3), [YELLOW[1], YELLOW[2], YELLOW[3], WHITE])
+    s.dot(cx + 7, cy - 5, EYE)
+    s.part(limb([(cx + 6, cy - 7), (cx + 9, cy - 11), (cx + 11, cy - 11)], 1), DARK, contact=False)
+    s.part(limb([(cx + 1, cy + 8), (cx + 1, cy + 10)], 1), DARK, contact=False)
+    return s
+
+
+save(strip([fly(t) for t in range(4)]), 'fly.png')
+
+
+# --- Rogue cron bot ----------------------------------------------------------------------
+def bot(pose='idle', t=0):
+    s = Sprite(48, 48)
+    step = (0, 3, 0, -3)[t] if pose == 'walk' else 0
+    bob = 1 if pose == 'walk' and t % 2 else 0
+    hip = (23, 33 + bob)
+    for sgn, col in ((-1, darker(GUNMETAL)), (1, GUNMETAL)):
+        foot = (23 + sgn * step + sgn * 2, 45)
+        knee = (hip[0] + sgn * step // 2 + 3, 39 + bob)
+        s.part(limb([hip, knee, foot], 3), col)
+        s.part(rrect(foot[0] - 3, 44, foot[0] + 4, 47, 1), col)
+    s.part(limb([(19, 27 + bob), (17, 32 + bob), (20, 35 + bob)], 3), darker(GUNMETAL))   # far arm
+    s.part(rrect(14, 21 + bob, 31, 35 + bob, 3), METAL)                                   # torso
+    s.part(rect(17, 24 + bob, 27, 31 + bob), [DARK[0], DARK[0], DARK[1], DARK[1]], contact=False)
+    # chest screen: a cron clock "* * * * *"
+    for i in range(5):
+        s.dot(18 + i * 2, 26 + bob, GLOW_RED if (i + t) % 2 else (255, 160, 120))
+    s.hline(18, 26, 29 + bob, TEAL[3])
+    s.hline(18, 22, 30 + bob, TEAL[1])
+    s.hline(15, 30, 34 + bob, METAL[0])
+    s.part(rrect(16, 9 + bob, 31, 20 + bob, 3), METAL)                                    # head
+    s.part(rect(21, 13 + bob, 31, 16 + bob), [GLOW_RED, GLOW_RED, GLOW_RED, GLOW_RED_HI], contact=False)
+    s.hline(22, 30, 13 + bob, GLOW_RED_HI)
+    s.vline(20, 4 + bob, 8 + bob, GUNMETAL[2])
+    s.part(ellipse(19, 2 + bob, 21, 4 + bob), RED)
+    # blaster arm
+    s.part(rrect(28, 26 + bob, 39, 30 + bob, 1), GUNMETAL)
+    s.part(rect(38, 27 + bob, 41, 28 + bob), DARK)
+    s.part(limb([(26, 23 + bob), (28, 27 + bob)], 4), METAL)
+    s.hline(30, 36, 26 + bob, GUNMETAL[3])
+    if pose == 'shoot':
+        r = 3 if t == 0 else 2
+        cx, cy = 43, 28 + bob
+        s.part(ellipse(cx - r, cy - r + 1, cx + r, cy + r - 1), [FLASH_HOT, FLASH_HOT, FLASH, WHITE], contact=False)
+        s.dots([(cx + r + 1, cy), (cx, cy - r), (cx, cy + r)], FLASH)
+    return s
+
+
+save(strip([bot('idle')] + [bot('walk', t) for t in range(4)] + [bot('shoot', t) for t in range(2)]), 'bot.png')
+
+
+# --- Merge-conflict turret ----------------------------------------------------------------
+def turret(state=0):
+    s = Sprite(32, 32)
+    kick = 1 if state == 2 else 0
+    s.part(rrect(3, 16, 28, 31, 2), GUNMETAL)
+    s.part(rect(6, 19, 25, 28), [DARK[0]] * 2 + [DARK[1]] * 2, contact=False)
+    # <<<<<<< / ======= / >>>>>>> in red, white, green
+    for i, col in enumerate((GLOW_RED, WHITE, GLOW_GREEN)):
+        y = 20 + i * 3
+        for k in range(5):
+            x = 8 + k * 3
+            if i == 0:
+                s.dots([(x + 1, y), (x, y + 1), (x + 1, y + 2)][:2], col)
+            elif i == 1:
+                s.hline(x, x + 1, y + 1, col)
+            else:
+                s.dots([(x, y), (x + 1, y + 1)], col)
+    s.part(ellipse(9, 7, 22, 19), METAL)                                     # dome
+    s.part(rect(19 - kick, 12, 31 - kick, 15), GUNMETAL)                     # barrel
+    s.hline(19 - kick, 30 - kick, 12, GUNMETAL[3])
+    s.part(ellipse(12, 10, 16, 13), [GLOW_RED, GLOW_RED, GLOW_RED, GLOW_RED_HI] if state else RED, contact=False)
+    if state == 1:
+        s.part(ellipse(26, 9, 31, 18), [FLASH_HOT, FLASH_HOT, FLASH, WHITE], contact=False)
+    return s
+
+
+save(strip([turret(0), turret(1), turret(2)]), 'turret.png')
+
+
+# --- Boss: THE MONOLITH, a 15-year-old mainframe nobody dares to touch ---------------------
+def boss(state='idle', t=0):
+    s = Sprite(96, 96)
+    rage = state == 'rage'
+    shell = ramp('#8a4c64') if rage else ramp('#5c6488')
+    # cable arms hanging from the sides
+    for side in (-1, 1):
+        x0 = 48 + side * 34
+        sway = (t * 2 - 1) * side
+        s.part(limb([(x0, 42), (x0 + side * 8, 52), (x0 + side * 9 + sway, 66), (x0 + side * 6 + sway, 74)], 5), CORAL)
+        s.part(rrect(x0 + side * 6 + sway - 3, 72, x0 + side * 6 + sway + 3, 79, 1), GUNMETAL)
+        s.vline(x0 + side * 6 + sway - 1, 80, 82, METAL[3])
+        s.vline(x0 + side * 6 + sway + 1, 80, 82, METAL[3])
+    s.part(rrect(14, 30, 82, 95, 4), shell)                                         # cabinet
+    s.part(rect(14, 30, 82, 35), [shell[1], shell[2], shell[3], shell[3]])
+    # rack slots with blinking LEDs and tape drives
+    for i, y in enumerate(range(40, 90, 8)):
+        s.part(rect(20, y, 76, y + 5), [DARK[0], DARK[0], DARK[1], DARK[1]], contact=False)
+        for k in range(7):
+            lit = (i + k + t + (state == 'open')) % 3 == 0
+            col = GLOW_RED if rage and lit else (GLOW_GREEN if lit else GREEN[0])
+            s.dot(23 + k * 4, y + 2, col)
+            s.dot(23 + k * 4, y + 3, mix(col, INK, 0.4))
+        s.hline(54, 73, y + 2, (44, 52, 80))
+        s.dot(58 + (i * 3 + t * 5) % 14, y + 2, TEAL[3])
+    # sticky note: DO NOT TOUCH
+    s.part(rect(60, 64, 74, 76), YELLOW, contact=False)
+    for y in (67, 70, 73):
+        s.hline(62, 72 - (y == 70) * 3, y, (90, 70, 40))
+    # the CRT head with its eye (shots come from (42, 22))
+    s.part(rrect(24, 4, 64, 36, 4), shell)
+    s.part(rrect(28, 8, 58, 32, 3), [rgb('#0d1a1c')] * 2 + [rgb('#12272a')] * 2, contact=False)
+    eye_col = [GLOW_RED, GLOW_RED, GLOW_RED, GLOW_RED_HI] if rage else [GREEN[1], GLOW_GREEN, GLOW_GREEN, GLOW_GREEN_HI]
+    open_h = {'idle': 5, 'open': 8, 'rage': 7}[state] - (1 if t and state == 'idle' else 0)
+    s.part(ellipse(33, 22 - open_h, 51, 22 + open_h), eye_col, contact=False)
+    s.part(ellipse(39, 22 - min(open_h, 4), 45, 22 + min(open_h, 4)), [EYE] * 4, contact=False)
+    s.dots([(40, 20), (41, 20)], WHITE)
+    for y in range(9, 32, 2):                                                     # scanlines
+        for x in range(29, 58):
+            if (x, y) in s.px:
+                s.px[(x, y)] = mix(s.px[(x, y)], (0, 0, 0), 0.25)
+    s.part(rect(60, 10, 63, 30), GUNMETAL, contact=False)                            # side vents
+    for y in range(12, 30, 3):
+        s.hline(60, 63, y, DARK[0])
+    # beacon
+    s.part(rect(42, 0, 46, 4), [GLOW_RED if (t or rage) else RED[1]] * 3 + [GLOW_RED_HI])
+    if rage:
+        for (x, y) in ((18, 46), (78, 58), (30, 84), (70, 40)):
+            s.dots([(x, y), (x + 1, y - 1), (x - 1, y + 1)], FLASH)
+    return s
+
+
+save(strip([boss('idle', 0), boss('idle', 1), boss('open', 0), boss('open', 1), boss('rage', 0), boss('rage', 1)]), 'boss.png')
+
+
+# --- Pickups (16x16): Heavy Commit, Claude Spark, Revert Grenade, Coffee, Story Points -----
+def pickup(kind):
+    s = Sprite(16, 16)
+    s.part(rrect(1, 2, 14, 15, 3), GUNMETAL)
+    s.part(rrect(3, 4, 12, 13, 2), [DARK[0], DARK[1], DARK[1], DARK[2]], contact=False)
+    if kind == 'heavy':
+        for x in (5, 9):
+            s.vline(x, 5, 12, YELLOW[2])
+            s.vline(x + 1, 5, 12, YELLOW[1])
+        s.hline(5, 10, 8, YELLOW[3])
+    elif kind == 'claude':
+        for ang in range(0, 360, 45):
+            for r in range(1, 5):
+                x = 8 + round(math.cos(math.radians(ang + 22)) * r)
+                y = 8 + round(math.sin(math.radians(ang + 22)) * r)
+                s.dot(x, y, CORAL[3] if r < 3 else CORAL[2])
+        s.dot(8, 8, WHITE)
+    elif kind == 'grenade':
+        s.part(ellipse(4, 6, 11, 13), LIME, contact=False)
+        s.part(rect(6, 4, 9, 6), GUNMETAL, contact=False)
+        s.dots([(10, 3), (11, 3), (11, 4)], METAL[3])
+        s.dots([(6, 8), (7, 8)], LIME[3])
+    elif kind == 'coffee':
+        s.part(rect(4, 7, 10, 13), [rgb('#d8d8e8')] * 2 + [WHITE] * 2, contact=False)
+        s.part(rect(11, 8, 12, 11), [rgb('#d8d8e8')] * 4, contact=False)
+        s.hline(5, 9, 7, rgb('#6a3a20'))
+        s.dots([(6, 4), (6, 5), (8, 3), (8, 5)], (200, 200, 220))
+    else:
+        s.part(poly([(8, 3), (13, 8), (8, 13), (3, 8)]), [YELLOW[0], YELLOW[1], YELLOW[2], YELLOW[3]], contact=False)
+        s.dots([(7, 6), (6, 7)], WHITE)
+    return s
+
+
+save(strip([pickup(k) for k in ('heavy', 'claude', 'grenade', 'coffee', 'points')]), 'pickups.png')
+
+
+# --- Billboard frame (brand text is drawn on top by the game) --------------------------------
+def billboard():
+    s = Sprite(160, 56)
+    s.part(rect(0, 0, 159, 55), [rgb('#0c0a24')] * 4, contact=False)
+    for y in range(2, 54, 3):
+        s.hline(4, 155, y, rgb('#12102e'))
+    neon, neon_hi = rgb('#2fd8ff'), rgb('#c8f6ff')
+    for (x0, y0, x1, y1) in ((0, 0, 159, 1), (0, 54, 159, 55), (0, 0, 1, 55), (158, 0, 159, 55)):
+        s.part(rect(x0, y0, x1, y1), [neon] * 4, contact=False)
+    s.hline(2, 157, 2, neon_hi)
+    for x in (4, 155):
+        for y in (4, 51):
+            s.dot(x, y, rgb('#ff4fd8'))
+    return s.image(outline=False)
+
+
+save(billboard(), 'billboard.png')
+
+print('character art written to', os.path.abspath(OUT))

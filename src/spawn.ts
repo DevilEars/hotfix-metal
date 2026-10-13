@@ -163,7 +163,7 @@ export function spawnPlayer(ctx: Ctx, x: number, y: number): number {
 
   addPositionComponent(world, entity, { local: { x, y } });
   addFlipComponent(world, entity, { flipX: false });
-  addSpriteComponent(world, entity, frameSprite(ctx, 'player', 32, 32, { layer: Layer.player }));
+  addSpriteComponent(world, entity, frameSprite(ctx, 'player', 48, 48, { layer: Layer.player }));
   addSpriteAnimationComponent(world, entity, {
     animationClipHandle: assets.clip.player_idle,
     frameDurationMilliseconds: 420,
@@ -274,14 +274,16 @@ export function spawnGrenade(ctx: Ctx, x: number, y: number, vx: number, vy: num
 export function spawnExplosion(ctx: Ctx, x: number, y: number, scale = 1): void {
   const { world, assets } = ctx;
   const entity = world.createEntity();
-  const sprite = frameSprite(ctx, 'explosion', 32, 32, {
+  const sprite = frameSprite(ctx, 'explosion', 56, 56, {
     layer: Layer.effect,
     pivotY: 0.5,
-    tint: new Color(1.5, 1.35, 1.1, 1),
+    tint: new Color(1.25, 1.15, 1.05, 1),
   });
+  // The 56 px sheet is drawn larger than the old 32 px one; keep blasts the same size.
+  const size = scale * 0.6;
 
   addPositionComponent(world, entity, { local: { x, y } });
-  addScaleComponent(world, entity, { local: { x: scale, y: scale } });
+  addScaleComponent(world, entity, { local: { x: size, y: size } });
   addSpriteComponent(world, entity, sprite);
   addSpriteAnimationComponent(world, entity, {
     animationClipHandle: assets.clip.explosion,
@@ -343,7 +345,7 @@ export function spawnJunior(
 
   addPositionComponent(world, entity, { local: { x, y } });
   addFlipComponent(world, entity, { flipX: false });
-  addSpriteComponent(world, entity, frameSprite(ctx, 'junior', 32, 32, { layer: Layer.hostage }));
+  addSpriteComponent(world, entity, frameSprite(ctx, 'junior', 48, 48, { layer: Layer.hostage }));
   addSpriteAnimationComponent(world, entity, {
     animationClipHandle: assets.clip.junior_tied,
     frameDurationMilliseconds: 380,
@@ -373,7 +375,7 @@ interface EnemySpec {
 
 const enemySpecs: Record<Exclude<EnemyKind, 'boss'>, EnemySpec> = {
   bug: { texture: 'bug', frame: [32, 32], clip: 'bug_walk', frameMs: 120, hp: 1, score: 100, width: 1.2, height: 0.95, speed: 2.8 },
-  bot: { texture: 'bot', frame: [32, 32], clip: 'bot_walk', frameMs: 200, hp: 2, score: 200, width: 0.95, height: 1.75, speed: 2.2 },
+  bot: { texture: 'bot', frame: [48, 48], clip: 'bot_walk', frameMs: 200, hp: 2, score: 200, width: 0.95, height: 1.75, speed: 2.2 },
   fly: { texture: 'fly', frame: [32, 32], clip: 'fly_flap', frameMs: 90, hp: 1, score: 150, width: 1.0, height: 1.0, speed: 3.6 },
   turret: { texture: 'turret', frame: [32, 32], clip: 'turret_idle', frameMs: 300, hp: 7, score: 400, width: 1.7, height: 1.6, speed: 0 },
 };

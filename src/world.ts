@@ -67,8 +67,36 @@ function buildGround(ctx: Ctx): void {
         local: { x: platform.x + k + 0.5, y: platform.y - 1 },
         isStatic: true,
       });
-      addSpriteComponent(world, rack, tile(ctx, 'rack', Layer.platform));
+      const texture = k === 0 ? 'rack_l' : k === platform.width - 1 ? 'rack_r' : 'rack';
+      addSpriteComponent(world, rack, tile(ctx, texture, Layer.platform));
     }
+  }
+}
+
+/** Street scenery from the Warped City pack; purely decorative, no colliders. */
+const props: Array<[TextureName, number]> = [
+  ['prop_box_wide', 6],
+  ['prop_banner_big', 31],
+  ['prop_monitor', 38],
+  ['prop_antenna', 57],
+  ['prop_box', 66],
+  ['prop_banner_side', 88],
+  ['prop_hotel', 117],
+  ['prop_box_wide', 147],
+  ['prop_banner_big', 162],
+  ['prop_antenna', 181],
+  ['prop_monitor', 196],
+  ['prop_banner_side', 224],
+  ['prop_box', 232],
+];
+
+function buildProps(ctx: Ctx): void {
+  const { world } = ctx;
+
+  for (const [texture, x] of props) {
+    const prop = world.createEntity();
+    addPositionComponent(world, prop, { local: { x, y: 0 }, isStatic: true });
+    addSpriteComponent(world, prop, tile(ctx, texture, Layer.billboard));
   }
 }
 
@@ -146,5 +174,6 @@ function buildBillboards(ctx: Ctx): void {
 export function buildWorld(ctx: Ctx): void {
   buildBackdrop(ctx);
   buildGround(ctx);
+  buildProps(ctx);
   buildBillboards(ctx);
 }
