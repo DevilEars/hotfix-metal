@@ -70,6 +70,7 @@ import {
   createProjectileSystem,
 } from './systems/actors';
 import { createCameraRigSystem, createFollowCameraSystem, createParallaxSystem } from './systems/camera';
+import { createSignFlickerSystem } from './systems/signs';
 import { createBulletHitSystem, createPlayerContactSystem } from './systems/collisions';
 import { createEnemySystem } from './systems/enemies';
 import { createFlowSystem, orderedScript } from './systems/flow';
@@ -260,6 +261,7 @@ export async function createHotfixGame(callbacks: GameCallbacks): Promise<Hotfix
   world.addSystem(createPopupSystem(ctx));
   world.addSystem(createCameraRigSystem(ctx));
   world.addSystem(createParallaxSystem(ctx));
+  world.addSystem(createSignFlickerSystem(ctx));
   world.addSystem(createFollowCameraSystem(ctx));
   world.addSystem(createHudSystem(ctx));
 

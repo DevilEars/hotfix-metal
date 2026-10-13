@@ -1,4 +1,5 @@
 import { createComponentId } from '@forge-game-engine/forge/ecs';
+import type { Color } from '@forge-game-engine/forge/rendering';
 
 export type EnemyKind = 'bug' | 'bot' | 'fly' | 'turret' | 'boss';
 
@@ -73,7 +74,7 @@ export interface BossComponent {
 
 export interface HudComponent {
   slot: string;
-  anchor: 'topLeft' | 'topRight' | 'topCenter' | 'bottomLeft' | 'bottomRight' | 'center';
+  anchor: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'banner' | 'boss';
   offsetX: number;
   offsetY: number;
 }
@@ -105,3 +106,15 @@ export interface PopupComponent {
   vy: number;
 }
 export const popupId = createComponentId<PopupComponent>('hm-popup');
+
+/** Neon sign text that flickers (tubes) or blinks (warning boards). */
+export interface SignFlickerComponent {
+  mode: 'flicker' | 'blink';
+  /** The text colour at full brightness. */
+  base: Color;
+  /** Seconds left in the current dim moment (flicker mode). */
+  dim: number;
+  /** Per-sign offset so signs don't pulse in sync. */
+  phase: number;
+}
+export const signFlickerId = createComponentId<SignFlickerComponent>('hm-sign-flicker');

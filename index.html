@@ -22,31 +22,31 @@
         </div>
         <h1>HOTFIX <span>METAL</span></h1>
         <p class="sub">A production-incident run-and-gun</p>
-        <p class="story">
-          INC-4021: production is down and you are the only engineer awake.
+        <p class="story panel">
+          <span class="incident">INC-4021</span> Production is down and you are the only engineer awake.
           Squash the bugs, free the juniors, resolve the merge conflicts and
           take down the Legacy Monolith before the SLA expires.
         </p>
         <p class="press blink">PRESS ENTER TO START</p>
         <table class="controls">
-          <tr><td>Move</td><td>A / D or arrows</td><td>Aim up</td><td>W or Up</td></tr>
-          <tr><td>Jump</td><td>K, Z or Space</td><td>Crouch</td><td>S or Down</td></tr>
-          <tr><td>Shoot</td><td>J, X or mouse</td><td>Git revert</td><td>L or C</td></tr>
+          <tr><td>Move</td><td><kbd>A</kbd><kbd>D</kbd> <kbd>&larr;</kbd><kbd>&rarr;</kbd></td><td>Aim up</td><td><kbd>W</kbd> <kbd>&uarr;</kbd></td></tr>
+          <tr><td>Jump</td><td><kbd>K</kbd> <kbd>Z</kbd> <kbd class="wide">Space</kbd></td><td>Crouch</td><td><kbd>S</kbd> <kbd>&darr;</kbd></td></tr>
+          <tr><td>Shoot</td><td><kbd>J</kbd> <kbd>X</kbd> <kbd class="wide">Mouse</kbd></td><td>Git revert</td><td><kbd>L</kbd> <kbd>C</kbd></td></tr>
         </table>
         <p class="partner" id="partner-line"></p>
-        <p class="hint">M toggles sound</p>
+        <p class="hint"><kbd>M</kbd> toggles sound</p>
       </div>
 
       <div id="gameover" class="screen">
         <h2>ROLLBACK FAILED</h2>
-        <p class="stats" id="gameover-stats"></p>
+        <p class="stats panel" id="gameover-stats"></p>
         <p class="press blink">PRESS ENTER TO REOPEN THE INCIDENT</p>
       </div>
 
       <div id="victory" class="screen">
         <h2 class="win">DEPLOYED TO PRODUCTION</h2>
         <p class="sub">All green. Nobody touched the Monolith ever again.</p>
-        <p class="stats" id="victory-stats"></p>
+        <p class="stats panel" id="victory-stats"></p>
         <div class="logo-row small">
           <span class="lockup" id="entelect-lockup-2"></span>
           <span class="times">x</span>

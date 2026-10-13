@@ -1,9 +1,19 @@
+/* Pixel fonts: Kenney Fonts (CC0), see third_party/kenney-fonts. */
+@font-face { font-family: 'HM Display'; src: url('./fonts/kenney-pixel-square.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'HM Body'; src: url('./fonts/kenney-mini-square.ttf') format('truetype'); font-display: block; }
+
 :root {
   --blue: #1e6fe0;
   --lime: #a5c249;
   --orange: #d97757;
+  --cyan: #2fd8ff;
+  --pink: #ff4fd8;
+  --red: #ff4a5c;
+  --yellow: #ffd25a;
   --ink: #070a1c;
-  --panel: rgba(7, 10, 28, 0.84);
+  --panel: rgba(8, 6, 28, 0.86);
+  /* One "pixel" of chrome, scaled with the stage. */
+  --px: max(2px, 0.42vmin);
 }
 
 * { box-sizing: border-box; }
@@ -13,7 +23,9 @@ html, body {
   height: 100%;
   background: #02030a;
   color: #e8eeff;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: 'HM Body', ui-monospace, Menlo, monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
   overflow: hidden;
 }
 
@@ -24,12 +36,13 @@ body { display: grid; place-items: center; }
   width: min(100vw, 177.78vh);
   height: min(56.25vw, 100vh);
   background: var(--ink);
-  box-shadow: 0 0 0 1px #14204a, 0 0 60px rgba(30, 111, 224, 0.25);
+  box-shadow: 0 0 0 1px #14204a, 0 0 60px rgba(47, 216, 255, 0.18);
 }
 
 #game-container { position: absolute; inset: 0; }
 #game-container canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 
+/* --- Overlay screens ------------------------------------------------------------ */
 .screen {
   position: absolute;
   inset: 0;
@@ -37,56 +50,133 @@ body { display: grid; place-items: center; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.1vmin;
+  gap: 1.3vmin;
   padding: 3vmin;
   text-align: center;
   background: var(--panel);
-  backdrop-filter: blur(2px);
-  font-size: clamp(10px, 1.7vmin, 22px);
+  font-size: clamp(10px, 1.8vmin, 22px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* CRT scanlines over every screen. */
+.screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
 }
 .screen.show { display: flex; }
-#loading { background: var(--ink); }
+#loading { background: var(--ink); font-family: 'HM Display', monospace; color: var(--cyan); font-size: clamp(14px, 3vmin, 32px); }
 
+/* Chunky arcade logo with a stepped pixel extrude and neon halo. */
 h1 {
   margin: 0;
-  font-size: clamp(28px, 9vmin, 120px);
-  letter-spacing: 0.06em;
+  font-family: 'HM Display', monospace;
+  font-weight: normal;
+  font-size: clamp(30px, 12vmin, 144px);
+  line-height: 1;
+  letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 0.6vmin 0 var(--blue), 0 0 3vmin rgba(30, 111, 224, 0.7);
+  text-shadow:
+    0 var(--px) 0 #9fd0ff,
+    0 calc(var(--px) * 2) 0 var(--blue),
+    0 calc(var(--px) * 3) 0 var(--blue),
+    0 calc(var(--px) * 4) 0 #0d3f8f,
+    0 calc(var(--px) * 5) 0 #071c45,
+    0 0 4vmin rgba(47, 216, 255, 0.45);
 }
-h1 span { color: var(--orange); text-shadow: 0 0.6vmin 0 #8a3f27, 0 0 3vmin rgba(217, 119, 87, 0.6); }
+h1 span {
+  color: var(--orange);
+  text-shadow:
+    0 var(--px) 0 #ffc2a8,
+    0 calc(var(--px) * 2) 0 #b5573a,
+    0 calc(var(--px) * 3) 0 #b5573a,
+    0 calc(var(--px) * 4) 0 #6e2c1a,
+    0 calc(var(--px) * 5) 0 #3a140b,
+    0 0 4vmin rgba(255, 79, 216, 0.35);
+}
 
 h2 {
   margin: 0;
-  font-size: clamp(22px, 7vmin, 90px);
+  font-family: 'HM Display', monospace;
+  font-weight: normal;
+  font-size: clamp(24px, 8vmin, 96px);
   letter-spacing: 0.06em;
-  color: #ff6670;
-  text-shadow: 0 0.5vmin 0 #5c1020;
+  color: var(--red);
+  text-shadow:
+    0 calc(var(--px) * 2) 0 #7a1222,
+    0 calc(var(--px) * 4) 0 #2e0610,
+    0 0 3vmin rgba(255, 74, 92, 0.55);
 }
-h2.win { color: var(--lime); text-shadow: 0 0.5vmin 0 #3d5018, 0 0 3vmin rgba(165, 194, 73, 0.5); }
+h2.win {
+  color: var(--lime);
+  text-shadow:
+    0 calc(var(--px) * 2) 0 #4d6620,
+    0 calc(var(--px) * 4) 0 #1e2a0a,
+    0 0 3vmin rgba(165, 194, 73, 0.55);
+}
 
-.sub { margin: 0; letter-spacing: 0.2em; text-transform: uppercase; color: #9fb3e8; }
-.story { max-width: 58ch; margin: 0.6vmin 0; line-height: 1.5; color: #cdd8f6; }
-.press { margin: 1vmin 0; font-size: 1.35em; color: #ffe27a; letter-spacing: 0.12em; }
-.stats { margin: 0; line-height: 1.8; font-size: 1.2em; white-space: pre-line; }
-.hint { margin: 0; color: #6f81b3; font-size: 0.8em; }
+.sub { margin: calc(var(--px) * 3) 0 0; letter-spacing: 0.24em; color: var(--cyan); text-shadow: 0 0 1.5vmin rgba(47, 216, 255, 0.5); }
+.story { max-width: 62ch; margin: 0.4vmin 0; line-height: 1.7; color: #cdd8f6; text-transform: none; letter-spacing: 0.04em; }
+.incident { color: var(--red); margin-right: 0.6em; }
+.press {
+  margin: 1vmin 0;
+  font-family: 'HM Display', monospace;
+  font-size: 1.6em;
+  color: var(--yellow);
+  letter-spacing: 0.14em;
+  text-shadow: 0 var(--px) 0 #7a5410, 0 0 2vmin rgba(255, 210, 90, 0.55);
+}
+.stats { margin: 0; line-height: 1.9; font-size: 1.2em; white-space: pre-line; }
+.hint { margin: 0; color: #7f8fc0; font-size: 0.85em; }
 .partner { margin: 0.4vmin 0 0; color: #9fb3e8; font-size: 0.85em; }
 
-.controls { border-collapse: collapse; color: #b9c7ef; }
-.controls td { padding: 0.35vmin 1.4vmin; border-bottom: 1px solid #1c2958; }
-.controls td:nth-child(odd) { color: var(--lime); text-align: right; }
-.controls td:nth-child(even) { text-align: left; }
+/* Neon panel with notched pixel corners, like the in-game signs. */
+.panel {
+  position: relative;
+  padding: 1.4vmin 2.4vmin;
+  background: rgba(10, 8, 32, 0.85);
+  border: var(--px) solid var(--cyan);
+  box-shadow: 0 0 0 var(--px) #0a0820, 0 0 2.2vmin rgba(47, 216, 255, 0.35), inset 0 0 1.6vmin rgba(47, 216, 255, 0.12);
+  clip-path: polygon(
+    var(--px) 0, calc(100% - var(--px)) 0, 100% var(--px), 100% calc(100% - var(--px)),
+    calc(100% - var(--px)) 100%, var(--px) 100%, 0 calc(100% - var(--px)), 0 var(--px)
+  );
+}
 
-.logo-row { display: flex; align-items: center; gap: 2vmin; margin-bottom: 1vmin; }
+/* Controls as keycaps. */
+.controls { border-collapse: separate; border-spacing: 1.6vmin 0.7vmin; color: #b9c7ef; }
+.controls td:nth-child(odd) { color: var(--lime); text-align: right; }
+.controls td:nth-child(even) { text-align: left; white-space: nowrap; }
+kbd {
+  display: inline-block;
+  min-width: 2.2em;
+  margin: 0 0.15em;
+  padding: 0.25em 0.45em 0.15em;
+  font-family: 'HM Body', monospace;
+  font-size: 0.95em;
+  line-height: 1;
+  text-align: center;
+  color: #fff;
+  background: #2a2560;
+  border: var(--px) solid #5a54a8;
+  border-bottom-width: calc(var(--px) * 2.5);
+  border-bottom-color: #14102e;
+}
+kbd.wide { min-width: 4.4em; }
+
+/* Brand lockups (text fallback; official logos replace them when present). */
+.logo-row { display: flex; align-items: center; gap: 2.4vmin; margin-bottom: 1.2vmin; }
 .logo-row.small { margin: 1.5vmin 0 0; transform: scale(0.8); }
-.times { color: #6f81b3; font-size: 2em; }
-.lockup { display: inline-flex; flex-direction: column; align-items: center; gap: 0.3vmin; }
+.times { font-family: 'HM Display', monospace; color: #6f81b3; font-size: 2em; }
+.lockup { display: inline-flex; flex-direction: column; align-items: center; gap: 0.6vmin; }
 .lockup img { height: clamp(24px, 6vmin, 70px); image-rendering: auto; }
-.lockup .wordmark { font-weight: 800; font-size: clamp(20px, 5vmin, 56px); letter-spacing: 0.12em; line-height: 1; }
-.lockup .tag { font-size: 0.8em; letter-spacing: 0.18em; text-transform: uppercase; }
-.entelect .wordmark { color: var(--blue); text-shadow: 0 0 2vmin rgba(30, 111, 224, 0.6); }
+.lockup .wordmark { font-family: 'HM Display', monospace; font-size: clamp(18px, 4.6vmin, 52px); letter-spacing: 0.12em; line-height: 1; }
+.lockup .tag { font-size: 0.8em; letter-spacing: 0.2em; }
+.entelect .wordmark { color: var(--blue); text-shadow: 0 var(--px) 0 #0d3f8f, 0 0 2vmin rgba(30, 111, 224, 0.6); }
 .entelect .tag { color: var(--lime); }
-.claude .wordmark { color: var(--orange); font-weight: 600; letter-spacing: 0.04em; text-shadow: 0 0 2vmin rgba(217, 119, 87, 0.5); }
+.claude .wordmark { color: var(--orange); text-shadow: 0 var(--px) 0 #6e2c1a, 0 0 2vmin rgba(217, 119, 87, 0.5); }
 .claude .tag { color: #f1c3b2; }
 
 .blink { animation: blink 1.1s steps(2, start) infinite; }

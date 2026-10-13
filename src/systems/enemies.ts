@@ -37,7 +37,7 @@ function updateBoss(ctx: Ctx, entity: number, enemy: EnemyComponent, position: P
     if (position.local.x <= arenaX + 0.01) {
       boss.entered = true;
       ctx.sfx('boss', 0.8);
-      showBanner(state, 'WARNING - THE LEGACY MONOLITH | "NOBODY KNOWS HOW IT WORKS"', 4);
+      showBanner(state, 'WARNING - THE LEGACY MONOLITH: "NOBODY KNOWS HOW IT WORKS"', 4);
       ctx.cam.shake = 0.6;
     }
 

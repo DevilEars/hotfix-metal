@@ -481,7 +481,7 @@ export function spawnPopup(ctx: Ctx, x: number, y: number, text: string, color: 
   addPositionComponent(world, entity, { local: { x: x - 3, y } });
   addTextComponent(world, entity, {
     text,
-    fontAtlas: ctx.assets.font,
+    fontAtlas: ctx.assets.fontBody,
     size: 0.5,
     color,
     outlineColor: new Color(0.05, 0.06, 0.15, 1),

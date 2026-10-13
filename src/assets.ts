@@ -48,7 +48,16 @@ export const textureNames = [
   'rack',
   'rack_l',
   'rack_r',
-  'billboard',
+  'sign_screen',
+  'sign_pole',
+  'sign_neon_cyan',
+  'sign_neon_pink',
+  'sign_hanging',
+  'sign_cable',
+  'sign_hazard',
+  'hud_banner',
+  'hud_banner_warn',
+  'hud_bossbar',
   'sky',
   'stars',
   'skyline_far',
@@ -88,7 +97,10 @@ export interface Assets {
   tex: Record<TextureName, Texture>;
   clips: AssetRegistry<AnimationClip>;
   clip: Record<ClipName, number>;
-  font: FontAtlas;
+  /** Kenney Pixel Square: titles, billboards, the HUD banner. */
+  fontDisplay: FontAtlas;
+  /** Kenney Mini Square: HUD rows, subtitles, popups. */
+  fontBody: FontAtlas;
   sounds: Record<SfxName, SoundAsset>;
   music: SoundAsset;
   mixer: SoundMixer;
@@ -124,10 +136,10 @@ export async function loadAssets(renderContext: RenderContext): Promise<Assets> 
   const sounds = Object.fromEntries(soundEntries) as Record<SfxName, SoundAsset>;
   const music = await soundCache.getOrLoad('audio/music.wav');
 
-  const fontAtlas = await new FontAtlasCache(renderContext).getOrLoad({
-    metricsUrl: 'fonts/default.json',
-    imageUrl: 'fonts/default.png',
-  });
+  const fontCache = new FontAtlasCache(renderContext);
+  const loadFont = (name: string): Promise<FontAtlas> =>
+    fontCache.getOrLoad({ metricsUrl: `fonts/${name}.json`, imageUrl: `fonts/${name}.png` });
+  const [fontDisplay, fontBody] = await Promise.all([loadFont('pixel-display'), loadFont('pixel-body')]);
 
   // Animation clips -----------------------------------------------------------
   const clips = new AssetRegistry<AnimationClip>();
@@ -172,7 +184,8 @@ export async function loadAssets(renderContext: RenderContext): Promise<Assets> 
     tex,
     clips,
     clip,
-    font: fontAtlas,
+    fontDisplay,
+    fontBody,
     sounds,
     music,
     mixer,

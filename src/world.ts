@@ -2,11 +2,12 @@ import { addPositionComponent } from '@forge-game-engine/forge/common';
 import { addSpriteComponent, Color, createImageSprite, SpriteEcsComponent } from '@forge-game-engine/forge/rendering';
 import { addTextComponent } from '@forge-game-engine/forge/text';
 import { TextureName } from './assets';
-import { followCameraId, parallaxId } from './components';
+import { followCameraId, parallaxId, SignFlickerComponent, signFlickerId } from './components';
 import { BOSS_ARENA_CENTER, Layer, PIXELS_PER_UNIT, RenderCat, VIEW_HEIGHT } from './constants';
 import { Ctx } from './ctx';
 import { platforms } from './level';
 import { BRAND } from './brand';
+import { hardShadow, textSize } from './text';
 
 const tile = (ctx: Ctx, texture: TextureName, layer: number, category: number = RenderCat.world): SpriteEcsComponent => ({
   ...createImageSprite(ctx.assets.tex[texture], { pixelsPerUnit: PIXELS_PER_UNIT }),
@@ -100,9 +101,34 @@ function buildProps(ctx: Ctx): void {
   }
 }
 
+type SignStyle = 'screen' | 'neonCyan' | 'neonPink' | 'hanging' | 'hazard';
+
+interface SignSpec {
+  texture: TextureName;
+  /** Frame size in world units. */
+  width: number;
+  height: number;
+  /** Centre of the text area relative to the frame centre, and its width. */
+  textY: number;
+  textWidth: number;
+  supports: 'poles' | 'cables' | 'none';
+  flicker?: SignFlickerComponent['mode'];
+}
+
+const px = (value: number): number => value / PIXELS_PER_UNIT;
+
+const signSpecs: Record<SignStyle, SignSpec> = {
+  screen: { texture: 'sign_screen', width: px(160), height: px(64), textY: -px(2), textWidth: px(146), supports: 'poles' },
+  neonCyan: { texture: 'sign_neon_cyan', width: px(160), height: px(56), textY: 0, textWidth: px(144), supports: 'none', flicker: 'flicker' },
+  neonPink: { texture: 'sign_neon_pink', width: px(160), height: px(56), textY: 0, textWidth: px(144), supports: 'none', flicker: 'flicker' },
+  hanging: { texture: 'sign_hanging', width: px(160), height: px(60), textY: -px(2), textWidth: px(146), supports: 'cables' },
+  hazard: { texture: 'sign_hazard', width: px(192), height: px(72), textY: 0, textWidth: px(180), supports: 'poles', flicker: 'blink' },
+};
+
 interface Board {
   x: number;
   y: number;
+  style: SignStyle;
   title: string;
   subtitle: string;
   titleColor: Color;
@@ -115,58 +141,95 @@ const hex = (value: string, boost = 1): Color => {
   return new Color(((n >> 16) & 255) / 255 * boost, ((n >> 8) & 255) / 255 * boost, (n & 255) / 255 * boost, 1);
 };
 
+/** Repeats a 1-unit-tall strip texture vertically between two heights. */
+function strip(ctx: Ctx, texture: TextureName, x: number, from: number, to: number): void {
+  for (let y = from; y < to; y++) {
+    const entity = ctx.world.createEntity();
+    addPositionComponent(ctx.world, entity, { local: { x, y }, isStatic: true });
+    addSpriteComponent(ctx.world, entity, tile(ctx, texture, Layer.billboard));
+  }
+}
+
+function addSignText(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  options: { text: string; font: 'display' | 'body'; scale: number; color: Color; width: number; flicker?: SignFlickerComponent['mode'] },
+): void {
+  const { world } = ctx;
+  const entity = world.createEntity();
+
+  // Text boxes start at their left edge; centre the box on the sign.
+  addPositionComponent(world, entity, { local: { x: x - options.width / 2, y }, isStatic: true });
+  addTextComponent(world, entity, {
+    text: options.text,
+    fontAtlas: options.font === 'display' ? ctx.assets.fontDisplay : ctx.assets.fontBody,
+    size: textSize(options.scale),
+    color: options.color,
+    category: RenderCat.world,
+    layer: Layer.billboard + 1,
+    verticalAlign: 'baseline',
+    horizontalAlign: 'center',
+    maxWidth: options.width,
+    letterSpacing: 0.125,
+    ...hardShadow,
+  });
+
+  if (options.flicker) {
+    world.addComponent(entity, signFlickerId, { mode: options.flicker, base: options.color, dim: 0, phase: ctx.random.randomFloat(0, 3) });
+  }
+}
+
 function buildBillboards(ctx: Ctx): void {
   const { world } = ctx;
-  const entelectBlue = hex(BRAND.entelect.blue, 1.15);
-  const lime = hex(BRAND.entelect.lime);
-  const claude = hex(BRAND.claude.orange);
   const light = new Color(0.85, 0.9, 1, 1);
+  const lime = hex(BRAND.entelect.lime, 1.15);
+  const ink = new Color(0.12, 0.08, 0.22, 1);
 
+  // Titles above 1.0 bloom like neon; the lightbox uses dark ink instead.
   const boards: Board[] = [
-    { x: 15.5, y: 8.4, title: 'ENTELECT', subtitle: BRAND.entelect.tagline, titleColor: entelectBlue, subtitleColor: lime },
-    { x: 53, y: 8.6, title: 'git blame', subtitle: 'was not me', titleColor: light, subtitleColor: lime },
-    { x: 97, y: 8.8, title: 'Claude', subtitle: 'Preferred Partner', titleColor: claude, subtitleColor: light },
-    { x: 136, y: 9.2, title: 'NOT A BUG', subtitle: "it's a feature", titleColor: light, subtitleColor: lime },
-    { x: 188, y: 8.6, title: 'ENTELECT', subtitle: BRAND.entelect.tagline, titleColor: entelectBlue, subtitleColor: lime },
-    { x: 211, y: 9, title: 'LGTM', subtitle: 'ship it', titleColor: light, subtitleColor: claude },
-    { x: BOSS_ARENA_CENTER, y: 10.2, title: 'PRODUCTION', subtitle: 'no deploys on Fridays', titleColor: new Color(1, 0.4, 0.4, 1), subtitleColor: light },
+    { x: 15.5, y: 8.4, style: 'screen', title: 'ENTELECT', subtitle: BRAND.entelect.tagline, titleColor: hex(BRAND.entelect.blue, 1.7), subtitleColor: lime },
+    { x: 53, y: 8.6, style: 'neonCyan', title: 'git blame', subtitle: 'was not me', titleColor: new Color(0.7, 1.9, 2.3, 1), subtitleColor: lime },
+    { x: 97, y: 8.8, style: 'screen', title: 'Claude', subtitle: 'Preferred Partner', titleColor: hex(BRAND.claude.orange, 1.25), subtitleColor: light },
+    { x: 136, y: 9.2, style: 'hanging', title: 'NOT A BUG', subtitle: "it's a feature", titleColor: ink, subtitleColor: new Color(0.62, 0.26, 0.16, 1) },
+    { x: 188, y: 8.6, style: 'screen', title: 'ENTELECT', subtitle: BRAND.entelect.tagline, titleColor: hex(BRAND.entelect.blue, 1.7), subtitleColor: lime },
+    { x: 211, y: 9, style: 'neonPink', title: 'LGTM', subtitle: 'ship it', titleColor: new Color(2.3, 0.75, 2, 1), subtitleColor: light },
+    { x: BOSS_ARENA_CENTER, y: 10.4, style: 'hazard', title: 'PRODUCTION', subtitle: 'no deploys on Fridays', titleColor: new Color(2.6, 0.55, 0.6, 1), subtitleColor: light },
   ];
 
   for (const board of boards) {
+    const spec = signSpecs[board.style];
+    const bottom = board.y - spec.height / 2;
+    const top = board.y + spec.height / 2;
+
+    if (spec.supports === 'poles') {
+      for (const side of [-1, 1]) {
+        strip(ctx, 'sign_pole', board.x + side * (spec.width / 2 - 1.5), 0, bottom);
+      }
+    } else if (spec.supports === 'cables') {
+      strip(ctx, 'sign_cable', board.x - px(58), top - px(4), VIEW_HEIGHT + 2);
+      strip(ctx, 'sign_cable', board.x + px(57), top - px(4), VIEW_HEIGHT + 2);
+    }
+
     const frame = world.createEntity();
     addPositionComponent(world, frame, { local: { x: board.x, y: board.y }, isStatic: true });
-    addSpriteComponent(world, frame, {
-      ...tile(ctx, 'billboard', Layer.billboard),
-      pivot: { x: 0.5, y: 0.5 },
-    });
+    addSpriteComponent(world, frame, { ...tile(ctx, spec.texture, Layer.billboard), pivot: { x: 0.5, y: 0.5 } });
 
-    const title = world.createEntity();
-    addPositionComponent(world, title, { local: { x: board.x - 4.6, y: board.y + 0.2 }, isStatic: true });
-    addTextComponent(world, title, {
-      text: board.title,
-      fontAtlas: ctx.assets.font,
-      size: 1.15,
+    const textY = board.y + spec.textY;
+    addSignText(ctx, board.x, textY + 0.05, {
+      text: board.title.toUpperCase(),
+      font: 'display',
+      scale: 2,
       color: board.titleColor,
-      category: RenderCat.world,
-      layer: Layer.billboard + 1,
-      verticalAlign: 'baseline',
-      horizontalAlign: 'center',
-      maxWidth: 9.2,
-      letterSpacing: 0.06,
+      width: spec.textWidth,
+      flicker: spec.flicker,
     });
-
-    const subtitle = world.createEntity();
-    addPositionComponent(world, subtitle, { local: { x: board.x - 4.6, y: board.y - 0.55 }, isStatic: true });
-    addTextComponent(world, subtitle, {
-      text: board.subtitle,
-      fontAtlas: ctx.assets.font,
-      size: 0.6,
+    addSignText(ctx, board.x, textY - 0.8, {
+      text: board.subtitle.toUpperCase(),
+      font: 'body',
+      scale: 1,
       color: board.subtitleColor,
-      category: RenderCat.world,
-      layer: Layer.billboard + 1,
-      verticalAlign: 'baseline',
-      horizontalAlign: 'center',
-      maxWidth: 9.2,
+      width: spec.textWidth,
     });
   }
 }

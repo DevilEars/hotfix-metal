@@ -12,9 +12,9 @@ bottom-centre in the engine). Re-run with `npm run assets`.
 import math
 import os
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from pixel import INK, Sprite, ellipse, limb, mix, poly, polar, ramp, rect, rgb, rrect, strip, union
+from pixel import INK, Sprite, selective_outline, ellipse, limb, mix, poly, polar, ramp, rect, rgb, rrect, strip, union
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'art')
 os.makedirs(OUT, exist_ok=True)
@@ -445,22 +445,203 @@ def pickup(kind):
 save(strip([pickup(k) for k in ('heavy', 'claude', 'grenade', 'coffee', 'points')]), 'pickups.png')
 
 
-# --- Billboard frame (brand text is drawn on top by the game) --------------------------------
-def billboard():
-    s = Sprite(160, 56)
-    s.part(rect(0, 0, 159, 55), [rgb('#0c0a24')] * 4, contact=False)
-    for y in range(2, 54, 3):
-        s.hline(4, 155, y, rgb('#12102e'))
-    neon, neon_hi = rgb('#2fd8ff'), rgb('#c8f6ff')
-    for (x0, y0, x1, y1) in ((0, 0, 159, 1), (0, 54, 159, 55), (0, 0, 1, 55), (158, 0, 159, 55)):
-        s.part(rect(x0, y0, x1, y1), [neon] * 4, contact=False)
-    s.hline(2, 157, 2, neon_hi)
-    for x in (4, 155):
-        for y in (4, 51):
-            s.dot(x, y, rgb('#ff4fd8'))
-    return s.image(outline=False)
+# --- Neon signage (billboards) and HUD panels --------------------------------------------
+# Drawn straight onto RGBA images so glass, glow halos and backings can be
+# translucent. Text is drawn on top by the game with the pixel fonts.
+NEON_CYAN = rgb('#2fd8ff')
+NEON_PINK = rgb('#ff4fd8')
+NEON_RED = rgb('#ff4a5c')
+HAZARD_YELLOW = rgb('#ffcf3a')
 
 
-save(billboard(), 'billboard.png')
+def canvas(w, h):
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    return img, ImageDraw.Draw(img)
+
+
+def rgba(color, alpha=255):
+    return tuple(color[:3]) + (alpha,)
+
+
+def bevel_box(d, x0, y0, x1, y1, colors, r=2):
+    """A shaded metal box: light top/left rim, dark bottom/right rim."""
+    shadow, dark, mid, light = colors
+    d.rounded_rectangle([x0, y0, x1, y1], radius=r, fill=rgba(shadow))
+    d.rounded_rectangle([x0, y0, x1 - 1, y1 - 1], radius=r, fill=rgba(light))
+    d.rounded_rectangle([x0 + 1, y0 + 1, x1 - 1, y1 - 1], radius=r, fill=rgba(dark))
+    d.rounded_rectangle([x0 + 1, y0 + 1, x1 - 2, y1 - 2], radius=r, fill=rgba(mid))
+
+
+def bolt(d, x, y):
+    d.rectangle([x, y, x + 1, y + 1], fill=rgba(METAL[3]))
+    d.point((x + 1, y + 1), fill=rgba(METAL[0]))
+
+
+def glass(d, x0, y0, x1, y1, base=rgb('#0a0d24'), line=rgb('#111a3e'), alpha=235):
+    d.rectangle([x0, y0, x1, y1], fill=rgba(base, alpha))
+    for y in range(y0 + 1, y1, 2):
+        d.line([(x0, y), (x1, y)], fill=rgba(line, alpha))
+    for y in range(y0 + 2, y1, 4):
+        for x in range(x0 + 2, x1, 4):
+            d.point((x, y), fill=rgba(mix(line, (60, 80, 160), 0.3), alpha))
+
+
+def glow_rect(d, x0, y0, x1, y1, color, width=2, r=3):
+    """Neon tube: halo outside and inside, bright core, white-hot centre line."""
+    halo = rgba(color, 70)
+    d.rounded_rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], radius=r + 1, outline=halo, width=1)
+    d.rounded_rectangle([x0 + width, y0 + width, x1 - width, y1 - width], radius=max(0, r - width), outline=halo, width=1)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=r, outline=rgba(color), width=width)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=r, outline=rgba(mix(color, WHITE, 0.6)), width=1)
+
+
+def ink_outline(img):
+    return selective_outline(img) if img.getbbox() else img
+
+
+def sign_screen():
+    """Rooftop LED screen: metal frame, glass with scanlines, lamps on top."""
+    img, d = canvas(160, 64)
+    bevel_box(d, 0, 4, 159, 63, GUNMETAL, r=3)
+    glass(d, 5, 9, 154, 58)
+    d.rectangle([5, 9, 154, 9], fill=rgba(NEON_CYAN, 120))         # top glow line
+    d.rectangle([5, 58, 154, 58], fill=rgba(NEON_CYAN, 60))
+    for x, y in ((2, 6), (156, 6), (2, 60), (156, 60)):
+        bolt(d, x, y)
+    for x in (30, 80, 130):                                         # lamps
+        d.rectangle([x - 3, 0, x + 3, 4], fill=rgba(GUNMETAL[1]))
+        d.rectangle([x - 2, 4, x + 2, 5], fill=rgba(FLASH))
+        d.rectangle([x - 4, 6, x + 4, 7], fill=rgba(FLASH, 60))
+    return ink_outline(img)
+
+
+def sign_pole():
+    img, d = canvas(8, 16)
+    shades = [METAL[0], METAL[1], METAL[2], METAL[3], METAL[3], METAL[2], METAL[1], METAL[0]]
+    for x, c in enumerate(shades):
+        d.line([(x, 0), (x, 15)], fill=rgba(mix(c, INK, 0.25)))
+    d.rectangle([1, 7, 6, 8], fill=rgba(GUNMETAL[1]))
+    d.point((3, 7), fill=rgba(METAL[3]))
+    return img
+
+
+def sign_neon(color):
+    """Bare neon tube on a smoked backing, clamped to the wall."""
+    img, d = canvas(160, 56)
+    d.rounded_rectangle([4, 4, 155, 51], radius=4, fill=rgba(rgb('#0a0820'), 150))
+    glow_rect(d, 4, 4, 155, 51, color, width=2, r=5)
+    for x in (16, 143):
+        for y in (2, 49):
+            d.rectangle([x - 2, y, x + 3, y + 4], fill=rgba(GUNMETAL[1]))
+            d.rectangle([x - 2, y, x + 3, y], fill=rgba(GUNMETAL[3]))
+            d.point((x, y + 2), fill=rgba(METAL[3]))
+    return img
+
+
+def sign_hanging():
+    """Backlit lightbox hung from cables: cream panel, dark ink lettering."""
+    img, d = canvas(160, 60)
+    for x in (22, 137):                                              # eyelets
+        d.ellipse([x - 2, 0, x + 2, 5], outline=rgba(METAL[2]), width=1)
+    bevel_box(d, 0, 4, 159, 59, ramp('#2c5c70'), r=2)
+    top, bottom = rgb('#f6f1dc'), rgb('#cfc7ad')
+    for y in range(9, 55):
+        t = (y - 9) / 45
+        d.line([(5, y), (154, y)], fill=rgba(mix(top, bottom, t)))
+    d.line([(5, 9), (154, 9)], fill=rgba(WHITE))
+    for x in range(8, 152, 9):                                       # tube hot spots behind the panel
+        d.point((x, 11), fill=rgba(WHITE))
+    for x, y in ((2, 6), (156, 6), (2, 56), (156, 56)):
+        bolt(d, x, y)
+    return ink_outline(img)
+
+
+def sign_cable():
+    img, d = canvas(2, 16)
+    d.line([(0, 0), (0, 15)], fill=rgba(rgb('#1a1630')))
+    d.line([(1, 0), (1, 15)], fill=rgba(rgb('#3a3658')))
+    return img
+
+
+def hazard_band(img, x0, y0, x1, y1, phase=0):
+    """Yellow/black stripes clipped to the band rectangle."""
+    w, h = x1 - x0 + 1, y1 - y0 + 1
+    band, bd = canvas(w, h)
+    bd.rectangle([0, 0, w, h], fill=rgba(rgb('#141018')))
+    for x in range(-h + phase, w + 1, 10):
+        bd.polygon([(x, h), (x + 5, h), (x + 5 + h, 0), (x + h, 0)], fill=rgba(HAZARD_YELLOW))
+    img.alpha_composite(band, (x0, y0))
+
+
+def sign_hazard():
+    """PRODUCTION: red frame, hazard stripes, warning lamps."""
+    img, d = canvas(192, 72)
+    bevel_box(d, 0, 0, 191, 71, ramp('#8a2a3a'), r=3)
+    hazard_band(img, 4, 4, 187, 10)
+    hazard_band(img, 4, 61, 187, 67, phase=5)
+    glass(d, 4, 12, 187, 59, base=rgb('#12060f'), line=rgb('#1e0a18'))
+    d.rectangle([4, 12, 187, 12], fill=rgba(NEON_RED, 140))
+    for x, y in ((8, 14), (179, 14), (8, 51), (179, 51)):            # warning lamps
+        d.ellipse([x - 2, y - 2, x + 6, y + 6], fill=rgba(NEON_RED, 60))
+        d.rectangle([x, y, x + 4, y + 4], fill=rgba(GLOW_RED))
+        d.point((x + 1, y + 1), fill=rgba(GLOW_RED_HI))
+    return ink_outline(img)
+
+
+def hud_banner(warn=False):
+    """Slanted announcement strip. 320x30; text sits in the middle."""
+    W = 320
+    img, d = canvas(W, 30)
+    edge, accent = (NEON_RED, HAZARD_YELLOW) if warn else (NEON_CYAN, NEON_PINK)
+    shape = [(10, 0), (W - 1, 0), (W - 11, 29), (0, 29)]
+    d.polygon(shape, fill=rgba(rgb('#0c0a24'), 225))
+    if warn:
+        stripes, sd = canvas(W, 30)
+        for x0 in (0, W - 34):                                          # hazard ends
+            for k in range(0, 34, 8):
+                x = x0 + k
+                sd.polygon([(x, 29), (x + 4, 29), (x + 14, 0), (x + 10, 0)], fill=rgba(HAZARD_YELLOW, 200))
+        mask = Image.new('L', (W, 30), 0)
+        ImageDraw.Draw(mask).polygon(shape, fill=255)
+        img.paste(stripes, (0, 0), Image.composite(stripes.getchannel('A'), mask, mask).point(lambda v: v))
+    d.line([(10, 0), (W - 1, 0)], fill=rgba(edge))
+    d.line([(10, 1), (W - 2, 1)], fill=rgba(mix(edge, WHITE, 0.5)))
+    d.line([(0, 29), (W - 11, 29)], fill=rgba(accent))
+    d.line([(1, 28), (W - 11, 28)], fill=rgba(accent, 90))
+    if not warn:
+        for i in range(2):                                           # >> and << chevrons
+            x = 14 + i * 6
+            d.line([(x, 10), (x + 4, 15), (x, 20)], fill=rgba(edge), width=2)
+            x = W - 18 - i * 6
+            d.line([(x, 10), (x - 4, 15), (x, 20)], fill=rgba(edge), width=2)
+    return img
+
+
+def hud_bossbar():
+    """Boss health frame: CRT-eye plate and a dark slot (fill drawn by the game)."""
+    img, d = canvas(208, 18)
+    bevel_box(d, 0, 0, 207, 17, GUNMETAL, r=2)
+    bevel_box(d, 2, 2, 19, 15, METAL, r=2)
+    d.rectangle([5, 4, 16, 13], fill=rgba(rgb('#0d1a1c')))
+    d.ellipse([6, 5, 15, 12], fill=rgba(GLOW_GREEN))
+    d.rectangle([9, 6, 12, 11], fill=rgba(EYE))
+    d.point((10, 7), fill=rgba(WHITE))
+    d.rectangle([22, 5, 204, 12], fill=rgba(rgb('#0a0612')))
+    d.line([(22, 5), (204, 5)], fill=rgba(rgb('#05030a')))
+    for x in range(40, 204, 20):                                     # tick marks
+        d.line([(x, 13), (x, 14)], fill=rgba(GUNMETAL[0]))
+    return ink_outline(img)
+
+
+save(sign_screen(), 'sign_screen.png')
+save(sign_pole(), 'sign_pole.png')
+save(sign_neon(NEON_CYAN), 'sign_neon_cyan.png')
+save(sign_neon(NEON_PINK), 'sign_neon_pink.png')
+save(sign_hanging(), 'sign_hanging.png')
+save(sign_cable(), 'sign_cable.png')
+save(sign_hazard(), 'sign_hazard.png')
+save(hud_banner(), 'hud_banner.png')
+save(hud_banner(warn=True), 'hud_banner_warn.png')
+save(hud_bossbar(), 'hud_bossbar.png')
 
 print('character art written to', os.path.abspath(OUT))
